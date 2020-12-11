@@ -31,13 +31,14 @@
 
 // TODO add support for clang
 #include <arc/concept/coro.h>
+#include <arc/coro/eventloop.h>
+#include <arc/coro/events/coro_task_event.h>
+#include <unistd.h>
 
 #include <coroutine>
 #include <exception>
-#include <string>
 #include <iostream>
-
-#include <sys/eventfd.h>
+#include <string>
 
 namespace arc {
 namespace coro {
@@ -58,40 +59,49 @@ enum class CoroReturnValueType {
 
 class TaskBase {
  public:
-  void* ret_{nullptr};
-  std::exception_ptr ret_exception_ptr_{nullptr};
-  CoroReturnValueType return_type_{CoroReturnValueType::UNKNOWN};
-
-  ~TaskBase() noexcept {
-    if (ret_) {
-      delete ret_;
-      ret_ = nullptr;
-    }
-    return_type_ = CoroReturnValueType::UNKNOWN;
-  }
-
-  bool await_ready() {
-    return false;
-  }
+  bool await_ready() { return false; }
 
  protected:
+
+  
   PromiseBase* promise_{nullptr};
-  int event_fd_{-1};
+  bool is_outest_coro_{false};
+
+  std::exception_ptr ret_exception_ptr_{nullptr};
+  CoroReturnValueType return_type_{CoroReturnValueType::UNKNOWN};
 };
 
 struct PromiseBase {
  public:
   PromiseBase() = default;
-  auto initial_suspend() noexcept { return std::suspend_never{}; }
-  auto final_suspend() noexcept { return std::suspend_never{}; }
+
+  template<typename PromiseType>
+  void CreateAndAddCoroEvent(std::coroutine_handle<PromiseType> handle) {
+    event_ptr_ = new events::CoroTaskEvent<PromiseType>(handle);
+    GetLocalEventLoop().AddEvent(event_ptr_);
+  }
+
+  void TriggerCoroEvent() {
+    if (event_ptr_) {
+      std::uint64_t temp = 1;
+      if (write(event_ptr_->GetFd(), (void*)&temp, sizeof(temp)) < 0) {
+        // TODO change this
+        throw std::logic_error("write is error");
+      }
+    }
+  }
+
+  auto initial_suspend() noexcept { 
+    return std::suspend_always{};
+  }
+  auto final_suspend() noexcept {
+    return std::suspend_never{};
+  }
 
   void unhandled_exception() {}
-  PromiseBase* get_return_object() noexcept { return this; }
 
-  void SetParentTask(TaskBase* task) { parent_task_ = task; }
-
- protected:
-  TaskBase* parent_task_{nullptr};
+  detail::TaskBase* parent_task_ptr_{nullptr};
+  events::EventBase* event_ptr_{nullptr};
 };
 
 }  // namespace detail
@@ -101,90 +111,105 @@ class Task<void> : public detail::TaskBase {
  public:
   struct promise_type : public detail::PromiseBase {
     void return_void() {
-      parent_task_->return_type_ = detail::CoroReturnValueType::VALUE;
+      TriggerCoroEvent();
+      (static_cast<Task<void>*>(parent_task_ptr_))->return_type_ =
+          detail::CoroReturnValueType::VALUE;
     }
+    promise_type* get_return_object() noexcept { return this; }
   };
 
   Task(promise_type* p) noexcept {
     promise_ = p;
-    promise_->SetParentTask(this);
+    p->parent_task_ptr_ = static_cast<detail::TaskBase*>(this);
   }
 
   void Result() {
     switch (return_type_) {
       [[unlikely]] case detail::CoroReturnValueType::EXCEPTION
           : std::rethrow_exception(ret_exception_ptr_);
-        break;
+      break;
       default:
         break;
     }
+    return;
   }
 
   // coro related
   template<typename PromiseType>
-  void await_suspend(std::coroutine_handle<PromiseType> parent_promise_handler) {
-
+  [[nodiscard]] std::coroutine_handle<promise_type> await_suspend(
+      std::coroutine_handle<PromiseType> parent_promise_handler) {
+    promise_->CreateAndAddCoroEvent<PromiseType>(parent_promise_handler);
+    return std::coroutine_handle<promise_type>::from_promise(
+        *(static_cast<promise_type*>(promise_)));
   }
 
-  void await_resume() {
-    Result();
-  }
+  void await_resume() { Result(); }
 
- private:
-  // promise_type* promise_{nullptr};
+  void Start() {
+    is_outest_coro_ = true;
+    auto handle = std::coroutine_handle<promise_type>::from_promise(
+        *(static_cast<promise_type*>(promise_)));
+    assert(!handle.done());
+    handle.resume();
+  }
 };
 
 template <arc::concepts::MoveableObjectOrVoid T>
 class Task : public detail::TaskBase {
  public:
   struct promise_type : public detail::PromiseBase {
-    void return_value(T&& value) {
-      parent_task_->ret_ = static_cast<void*> new T(std::move(value));
-      parent_task_->return_type_ =
+    template <arc::concepts::MoveableObjectOrVoid U = T>
+    void return_value(U&& value) {
+      TriggerCoroEvent();
+      (static_cast<Task<T>*>(parent_task_ptr_))->ret_ =
+          new std::remove_reference_t<U>(std::move(std::forward<U&&>(value)));
+      (static_cast<Task<T>*>(parent_task_ptr_))->return_type_ =
           arc::coro::detail::CoroReturnValueType::VALUE;
     }
+    promise_type* get_return_object() noexcept { return this; }
   };
 
   Task(promise_type* p) noexcept {
     promise_ = p;
-    promise_->SetParentTask(this);
+    p->parent_task_ptr_ = static_cast<detail::TaskBase*>(this);
+  }
+
+  ~Task() {
+    if (ret_) {
+      delete ret_;
+      ret_ = nullptr;
+    }
   }
 
   T Result() {
     switch (return_type_) {
       [[likely]] case detail::CoroReturnValueType::VALUE
-          : return std::move(*ret_);
+          : return std::move(*((T*)ret_));
       [[unlikely]] case detail::CoroReturnValueType::EXCEPTION
           : std::rethrow_exception(ret_exception_ptr_);
-        break;
+      break;
       default:
-        break;
+        // TODO change this
+        throw std::logic_error("cannot be here");
     }
   }
 
   // coro related
   template<typename PromiseType>
-  void await_suspend(std::coroutine_handle<PromiseType> parent_promise_handler) {
-    event_fd_ = eventfd(0, EFD_NONBLOCK);
-    if (event_fd_ < 0) {
-      // ERROR
-      // TODO handle it
-      std::cerr << "cannot create event fd " << errno << std::endl;
-      std::terminate();
-    }
+  [[nodiscard]] std::coroutine_handle<promise_type> await_suspend(
+      std::coroutine_handle<PromiseType> parent_promise_handler) {
+    promise_->CreateAndAddCoroEvent<PromiseType>(parent_promise_handler);
+    return std::coroutine_handle<promise_type>::from_promise(
+        *(static_cast<promise_type*>(promise_)));
   }
 
-  T await_resume() {
-    return Result();
-  }
+  T await_resume() { return Result(); }
 
  private:
-  // promise_type* promise_{nullptr};
+  T* ret_{nullptr};
 };
 
 }  // namespace coro
 }  // namespace arc
-
-int main() { arc::coro::Task<void> t(nullptr); }
 
 #endif /* LIBARC__CORO__CORE__TASK_H */

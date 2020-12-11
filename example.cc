@@ -1,7 +1,7 @@
 /*
- * File: eventloop.c
+ * File: example.cc
  * Project: libarc
- * File Created: Monday, 7th December 2020 9:17:50 pm
+ * File Created: Tuesday, 8th December 2020 10:18:54 pm
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
@@ -26,29 +26,53 @@
  * IN THE SOFTWARE.
  */
 
-#include <arc/coro/eventloop.h>
+#include <arc/coro/task.h>
 
 using namespace arc::coro;
 
-EventLoop::EventLoop() {
-  fd_ = epoll_create1(0);
-}
-
-bool EventLoop::IsDone() {
-  return total_added_task_num_ <= 0;
-}
-
-void EventLoop::Do() {
-}
-
-void EventLoop::AddEvent(events::EventBase* event) {
-  if (events_.find(event->GetId()) == events_.end()) {
-    events_[event->GetId()] = std::queue<events::EventBase*>();
+Task<int> InternalTask(int i) {
+  if (i <= 0) {
+    co_return 1;
+  } else {
+    co_return co_await InternalTask(i - 1) + i;
   }
-  events_[event->GetId()].push(event);
+  // assert(i > -1);
+  // std::cout << i << std::endl;
+  // co_return (i >= 0 ? i : i - 1);
+  // co_return (i >= 0 ? i : (co_await InternalTask(i - 1)));
 }
 
-EventLoop& GetLocalEventLoop() {
-  thread_local EventLoop loop{};
-  return loop;
+Task<void> TestEmptyCoro() {
+  int value = 0;
+  for (int i = 0; i < 1000000; i++) {
+    int ii = co_await InternalTask(0);
+    value += ii;
+    // std::cout << ii << std::endl;
+  }
+  // std::cout << co_await InternalTask(10) << std::endl;
+  std::cout << value << std::endl;
+  co_return;
+}
+
+
+int test111() {
+  int value = 0;
+  for (int i = 0; i < 1000000; i++) {
+    value += 1;
+  }
+  return value;
+}
+
+void StartEventLoop(Task<void> task) {
+  task.Start();
+  auto& event_loop = GetLocalEventLoop();
+  while (!event_loop.IsDone()) {
+    event_loop.Do();
+  }
+  std::cout << "finished" << std::endl;
+}
+
+int main() {
+  StartEventLoop(TestEmptyCoro());
+  // test111();
 }

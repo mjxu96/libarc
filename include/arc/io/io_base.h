@@ -35,7 +35,7 @@ namespace io {
 class IOBase {
  public:
   IOBase() = default;
-  ~IOBase() = default;
+  virtual ~IOBase() = default;
   virtual void Open() = 0;
   virtual void Close() = 0;
 

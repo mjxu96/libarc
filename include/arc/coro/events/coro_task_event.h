@@ -32,6 +32,7 @@
 #include "event_base.h"
 
 #include <coroutine>
+#include <sys/eventfd.h>
 
 namespace arc {
 namespace events {
@@ -39,9 +40,15 @@ namespace events {
 template<typename PromiseType>
 class CoroTaskEvent : public EventBase {
  public:
-  CoroTaskEvent(std::coroutine_handle<PromiseType> handle, int id) : EventBase(id), handle_(handle) {}
+  CoroTaskEvent(std::coroutine_handle<PromiseType> handle) : EventBase(-1, EventType::READ), handle_(handle) {
+    if ((fd_ = eventfd(0, 0)) < 0) {
+      // TODO change this
+      throw std::logic_error("event fd error");
+    }
+  }
 
   void Resume() override {
+    assert(!handle_.done());
     handle_.resume();
   }
  private:

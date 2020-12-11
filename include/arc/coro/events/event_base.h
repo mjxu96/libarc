@@ -6,17 +6,17 @@
  * -----
  * MIT License
  * Copyright (c) 2020 Minjun Xu
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
  * deal in the Software without restriction, including without limitation the
  * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
  * sell copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -29,23 +29,39 @@
 #ifndef LIBARC__CORO__EVENTS__EVENT_BASE_H
 #define LIBARC__CORO__EVENTS__EVENT_BASE_H
 
+#include <unistd.h>
+#include <iostream>
+
 namespace arc {
 namespace events {
 
+enum class EventType {
+  READ = 0U,
+  WRITE = 1U,
+};
+
 class EventBase {
  public:
-  EventBase(int id) : id_(id) {}
+  EventBase(int fd, EventType event_type) : fd_(fd), event_type_(event_type) {}
   virtual void Resume() = 0;
-  virtual ~EventBase() = 0;
+  virtual ~EventBase() {
+    if (fd_ > 0) {
+      if (close(fd_) < 0) {
+        std::cerr << "close " << fd_ << " error: " << errno << std::endl;
+      }
+      fd_ = -1;
+    }
+  }
 
-  int GetId() const {return id_;}
+  inline int GetFd() const { return fd_; }
+  inline EventType GetEventType() const { return event_type_; }
 
  protected:
-  int id_{-1};
+  int fd_{-1};
+  EventType event_type_;
 };
-  
-} // namespace events
-} // namespace arc
 
+}  // namespace events
+}  // namespace arc
 
 #endif /* LIBARC__CORO__EVENTS__EVENT_BASE_H */

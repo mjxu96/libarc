@@ -31,8 +31,11 @@
 
 #include <queue>
 #include <unordered_map>
+#include <unordered_set>
 #include <coroutine>
+#include <iostream>
 #include <sys/epoll.h>
+#include <assert.h>
 
 #include <arc/coro/events/event_base.h>
 #include <arc/io/io_base.h>
@@ -47,6 +50,7 @@ class EventLoop : public io::IOBase {
   bool IsDone();
   void Do();
   void AddEvent(events::EventBase*);
+  void AddCoroutine(events::EventBase*);
 
  private:
   int total_added_task_num_{0};
@@ -54,7 +58,11 @@ class EventLoop : public io::IOBase {
   void Open() override;
   void Close() override;
 
-  std::unordered_map<int, std::queue<events::EventBase*>> events_;
+  std::unordered_map<int, std::queue<events::EventBase*>> read_events_;
+  std::unordered_map<int, std::queue<events::EventBase*>> write_events_;
+  std::queue<events::EventBase*> coro_events_;
+
+  const int kMaxEventsSizePerWait = 64;
 };
 
 EventLoop& GetLocalEventLoop();
