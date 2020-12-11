@@ -31,8 +31,10 @@
 using namespace arc::coro;
 
 Task<int> InternalTask(int i) {
+  // std::cout << "interanal " << i << std::endl;
+  assert(i > -2);
   if (i <= 0) {
-    co_return 1;
+    co_return i;
   } else {
     co_return co_await InternalTask(i - 1) + i;
   }
@@ -44,13 +46,14 @@ Task<int> InternalTask(int i) {
 
 Task<void> TestEmptyCoro() {
   int value = 0;
-  for (int i = 0; i < 1000000; i++) {
+  // for (int i = 0; i < 1; i++) {
+  for (int i = 0; i < 1000; i++) {
     int ii = co_await InternalTask(0);
     value += ii;
     // std::cout << ii << std::endl;
   }
-  // std::cout << co_await InternalTask(10) << std::endl;
   std::cout << value << std::endl;
+  std::cout << co_await InternalTask(1000) << std::endl;
   co_return;
 }
 

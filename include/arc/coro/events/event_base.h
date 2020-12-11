@@ -30,37 +30,28 @@
 #define LIBARC__CORO__EVENTS__EVENT_BASE_H
 
 #include <unistd.h>
+
 #include <iostream>
 
 namespace arc {
 namespace events {
-
-enum class EventType {
-  READ = 0U,
-  WRITE = 1U,
-};
+namespace detail {
 
 class EventBase {
  public:
-  EventBase(int fd, EventType event_type) : fd_(fd), event_type_(event_type) {}
-  virtual void Resume() = 0;
-  virtual ~EventBase() {
-    if (fd_ > 0) {
-      if (close(fd_) < 0) {
-        std::cerr << "close " << fd_ << " error: " << errno << std::endl;
-      }
-      fd_ = -1;
-    }
+  EventBase(std::coroutine_handle<void> handle) : handle_(handle) {}
+  virtual ~EventBase() {}
+
+  virtual void Resume() {
+    assert(!handle_.done());
+    handle_.resume();
   }
 
-  inline int GetFd() const { return fd_; }
-  inline EventType GetEventType() const { return event_type_; }
-
  protected:
-  int fd_{-1};
-  EventType event_type_;
+  std::coroutine_handle<void> handle_{nullptr};
 };
 
+}  // namespace detail
 }  // namespace events
 }  // namespace arc
 

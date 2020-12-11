@@ -61,47 +61,42 @@ class TaskBase {
  public:
   bool await_ready() { return false; }
 
- protected:
+  friend struct PromiseBase;
 
-  
+ protected:
   PromiseBase* promise_{nullptr};
   bool is_outest_coro_{false};
 
   std::exception_ptr ret_exception_ptr_{nullptr};
   CoroReturnValueType return_type_{CoroReturnValueType::UNKNOWN};
+  events::CoroTaskEvent coro_event_{};
 };
 
 struct PromiseBase {
  public:
   PromiseBase() = default;
 
-  template<typename PromiseType>
+  template <typename PromiseType>
   void CreateAndAddCoroEvent(std::coroutine_handle<PromiseType> handle) {
-    event_ptr_ = new events::CoroTaskEvent<PromiseType>(handle);
-    GetLocalEventLoop().AddEvent(event_ptr_);
+    parent_task_ptr_->coro_event_.SetCoroutineHandle(handle);
+    GetLocalEventLoop().AddCoroutine(&parent_task_ptr_->coro_event_);
   }
 
-  void TriggerCoroEvent() {
-    if (event_ptr_) {
-      std::uint64_t temp = 1;
-      if (write(event_ptr_->GetFd(), (void*)&temp, sizeof(temp)) < 0) {
-        // TODO change this
-        throw std::logic_error("write is error");
-      }
+  void TriggerCoroEvent() noexcept {
+    if (!parent_task_ptr_->is_outest_coro_) {
+      GetLocalEventLoop().FinishCoroutine(parent_task_ptr_->coro_event_.GetCoroId());
     }
   }
 
-  auto initial_suspend() noexcept { 
-    return std::suspend_always{};
-  }
+  auto initial_suspend() noexcept { return std::suspend_always{}; }
   auto final_suspend() noexcept {
+    TriggerCoroEvent();
     return std::suspend_never{};
   }
 
   void unhandled_exception() {}
 
   detail::TaskBase* parent_task_ptr_{nullptr};
-  events::EventBase* event_ptr_{nullptr};
 };
 
 }  // namespace detail
@@ -111,7 +106,6 @@ class Task<void> : public detail::TaskBase {
  public:
   struct promise_type : public detail::PromiseBase {
     void return_void() {
-      TriggerCoroEvent();
       (static_cast<Task<void>*>(parent_task_ptr_))->return_type_ =
           detail::CoroReturnValueType::VALUE;
     }
@@ -135,7 +129,7 @@ class Task<void> : public detail::TaskBase {
   }
 
   // coro related
-  template<typename PromiseType>
+  template <typename PromiseType>
   [[nodiscard]] std::coroutine_handle<promise_type> await_suspend(
       std::coroutine_handle<PromiseType> parent_promise_handler) {
     promise_->CreateAndAddCoroEvent<PromiseType>(parent_promise_handler);
@@ -160,7 +154,6 @@ class Task : public detail::TaskBase {
   struct promise_type : public detail::PromiseBase {
     template <arc::concepts::MoveableObjectOrVoid U = T>
     void return_value(U&& value) {
-      TriggerCoroEvent();
       (static_cast<Task<T>*>(parent_task_ptr_))->ret_ =
           new std::remove_reference_t<U>(std::move(std::forward<U&&>(value)));
       (static_cast<Task<T>*>(parent_task_ptr_))->return_type_ =
@@ -195,7 +188,7 @@ class Task : public detail::TaskBase {
   }
 
   // coro related
-  template<typename PromiseType>
+  template <typename PromiseType>
   [[nodiscard]] std::coroutine_handle<promise_type> await_suspend(
       std::coroutine_handle<PromiseType> parent_promise_handler) {
     promise_->CreateAndAddCoroEvent<PromiseType>(parent_promise_handler);

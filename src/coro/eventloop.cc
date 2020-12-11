@@ -32,19 +32,25 @@ using namespace arc::coro;
 
 EventLoop::EventLoop() { fd_ = epoll_create1(0); }
 
-bool EventLoop::IsDone() { return total_added_task_num_ <= 0; }
+bool EventLoop::IsDone() { return total_added_task_num_ <= 0 && coro_events_.empty() && finished_coro_events_.empty(); }
 
 void EventLoop::Do() {
   // First we iterate over unfinished coroutine event
-  while (!coro_events_.empty()) {
-    coro_events_.front()->Resume();
-    delete coro_events_.front();
-    coro_events_.pop();
+  auto finished_coro_events_itr = finished_coro_events_.begin();
+  while (finished_coro_events_itr != finished_coro_events_.end()) {
+    (*finished_coro_events_itr)->Resume();
+    finished_coro_events_itr = finished_coro_events_.erase(finished_coro_events_itr);
   }
+
+  if (total_added_task_num_ <= 0) {
+    return;
+  }
+
+  std::cout << "waitingg io event" << std::endl;
   
   // Then we will handle all others
   epoll_event events[kMaxEventsSizePerWait];
-  events::EventBase* todo_events[kMaxEventsSizePerWait];
+  events::detail::IOEventBase* todo_events[kMaxEventsSizePerWait];
   int event_cnt = epoll_wait(fd_, events, kMaxEventsSizePerWait, -1);
   for (int i = 0; i < event_cnt; i++) {
     if ((events[i].events & EPOLLIN) != 0) {
@@ -65,7 +71,7 @@ void EventLoop::Do() {
 
   // Do cleanup
   for (int i = 0; i < event_cnt; i++) {
-    if (todo_events[i]->GetEventType() == events::EventType::READ) {
+    if (todo_events[i]->GetIOEventType() == events::detail::IOEventType::READ) {
       if (read_events_[todo_events[i]->GetFd()].empty()) {
         to_delete_read_events.insert(todo_events[i]->GetFd());
       }
@@ -110,20 +116,20 @@ void EventLoop::Do() {
   assert(epoll_ctl_ret == 0);
 }
 
-void EventLoop::AddEvent(events::EventBase* event) {
+void EventLoop::AddEvent(events::detail::IOEventBase* event) {
   auto target_fd = event->GetFd();
-  events::EventType event_type = event->GetEventType();
+  events::detail::IOEventType event_type = event->GetIOEventType();
 
   total_added_task_num_++;
-  std::unordered_map<int, std::queue<events::EventBase*>>* related_events_ptr =
+  std::unordered_map<int, std::queue<events::detail::IOEventBase*>>* related_events_ptr =
       nullptr;
-  if (event_type == events::EventType::READ) {
+  if (event_type == events::detail::IOEventType::READ) {
     related_events_ptr = &read_events_;
   } else {
     related_events_ptr = &write_events_;
   }
   if (related_events_ptr->find(target_fd) == related_events_ptr->end()) {
-    (*related_events_ptr)[target_fd] = std::queue<events::EventBase*>();
+    (*related_events_ptr)[target_fd] = std::queue<events::detail::IOEventBase*>();
   }
   (*related_events_ptr)[target_fd].push(event);
 
@@ -134,7 +140,7 @@ void EventLoop::AddEvent(events::EventBase* event) {
 
   epoll_event e_event{};
   int epoll_related_events =
-      EPOLLET | (event_type == events::EventType::READ ? EPOLLIN : EPOLLOUT);
+      EPOLLET | (event_type == events::detail::IOEventType::READ ? EPOLLIN : EPOLLOUT);
   e_event.events = epoll_related_events;
   e_event.data.fd = target_fd;
   int ret = epoll_ctl(fd_, EPOLL_CTL_ADD, target_fd, &e_event);
@@ -145,8 +151,17 @@ void EventLoop::AddEvent(events::EventBase* event) {
   }
 }
 
-void EventLoop::AddCoroutine(events::EventBase* event) {
-  coro_events_.push(event);
+void EventLoop::AddCoroutine(events::CoroTaskEvent* event) {
+  event->SetCoroId(current_coro_id_);
+  assert(coro_events_.find(current_coro_id_) == coro_events_.end());
+  coro_events_[current_coro_id_] = event;
+  current_coro_id_++;
+}
+
+void EventLoop::FinishCoroutine(std::uint64_t coro_id) {
+  assert(coro_events_.find(coro_id) != coro_events_.end());
+  finished_coro_events_.push_back(coro_events_[coro_id]);
+  coro_events_.erase(coro_id);
 }
 
 void EventLoop::Open() {

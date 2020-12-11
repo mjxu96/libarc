@@ -29,6 +29,7 @@
 #ifndef LIBARC__CORO__EVENTLOOP_H
 #define LIBARC__CORO__EVENTLOOP_H
 
+#include <list>
 #include <queue>
 #include <unordered_map>
 #include <unordered_set>
@@ -37,7 +38,8 @@
 #include <sys/epoll.h>
 #include <assert.h>
 
-#include <arc/coro/events/event_base.h>
+#include <arc/coro/events/coro_task_event.h>
+#include <arc/coro/events/io_event_base.h>
 #include <arc/io/io_base.h>
 
 namespace arc {
@@ -49,8 +51,10 @@ class EventLoop : public io::IOBase {
 
   bool IsDone();
   void Do();
-  void AddEvent(events::EventBase*);
-  void AddCoroutine(events::EventBase*);
+  void AddEvent(events::detail::IOEventBase*);
+
+  void AddCoroutine(events::CoroTaskEvent*);
+  void FinishCoroutine(std::uint64_t coro_id);
 
  private:
   int total_added_task_num_{0};
@@ -58,11 +62,14 @@ class EventLoop : public io::IOBase {
   void Open() override;
   void Close() override;
 
-  std::unordered_map<int, std::queue<events::EventBase*>> read_events_;
-  std::unordered_map<int, std::queue<events::EventBase*>> write_events_;
-  std::queue<events::EventBase*> coro_events_;
+  std::unordered_map<int, std::queue<events::detail::IOEventBase*>> read_events_;
+  std::unordered_map<int, std::queue<events::detail::IOEventBase*>> write_events_;
+
+  std::unordered_map<std::uint64_t, events::CoroTaskEvent*> coro_events_;
+  std::list<events::CoroTaskEvent*> finished_coro_events_;
 
   const int kMaxEventsSizePerWait = 64;
+  std::uint64_t current_coro_id_{0};
 };
 
 EventLoop& GetLocalEventLoop();
