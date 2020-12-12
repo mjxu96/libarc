@@ -1,7 +1,7 @@
 /*
- * File: io_base.h
+ * File: arc.h
  * Project: libarc
- * File Created: Monday, 7th December 2020 10:37:05 pm
+ * File Created: Saturday, 12th December 2020 12:35:15 pm
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
@@ -26,30 +26,16 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef LIBARC__IO__IO_BASE_H
-#define LIBARC__IO__IO_BASE_H
+#ifndef LIBARC__ARC_H
+#define LIBARC__ARC_H
 
-#include <stdexcept>
-#include <unistd.h>
-#include <system_error>
+#include <string>
 
 namespace arc {
-namespace io {
 
-class IOBase {
- public:
-  IOBase(int fd);
-  virtual ~IOBase(); 
-  virtual void Open();
-  virtual void Close();
-
- protected:
-  int fd_{-1};
-  bool is_open_{false};
-};
+const std::string Version();
   
-} // namespace io
 } // namespace arc
 
 
-#endif /* LIBARC__IO__IO_BASE_H */
+#endif /* LIBARC__ARC_H */

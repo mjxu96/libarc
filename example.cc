@@ -27,6 +27,7 @@
  */
 
 #include <arc/coro/task.h>
+#include <arc/arc.h>
 
 #include <memory>
 
@@ -109,6 +110,7 @@ int test111() {
 
 
 int main() {
+  std::cout << "arc version: " << arc::Version() << std::endl;
   StartEventLoop(TestEmptyCoro());
   // test111();
 }

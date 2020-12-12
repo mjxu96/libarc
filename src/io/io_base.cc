@@ -30,3 +30,27 @@
 #include <arc/io/io_base.h>
 
 using namespace arc::io;
+
+IOBase::IOBase(int fd) : fd_(fd) {}
+
+IOBase::~IOBase() {
+  Close();
+}
+
+void IOBase::Open() {
+  is_open_ = true;
+}
+
+void IOBase::Close() {
+  if (fd_ >= 0) {
+    if (close(fd_) < 0) {
+      throw std::system_error(errno, std::generic_category());
+    }
+    fd_ = -1;
+    is_open_ = false;
+  } else {
+    if (!is_open_) {
+      throw std::logic_error("Cannot close a file that has not been opened or already closed");
+    }
+  }
+}

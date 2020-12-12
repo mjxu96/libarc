@@ -30,7 +30,7 @@
 
 using namespace arc::coro;
 
-EventLoop::EventLoop() { fd_ = epoll_create1(0); }
+EventLoop::EventLoop() : IOBase(-1) { Open(); }
 
 bool EventLoop::IsDone() { return total_added_task_num_ <= 0 && coro_events_.empty() && finished_coro_events_.empty(); }
 
@@ -116,7 +116,7 @@ void EventLoop::Do() {
   assert(epoll_ctl_ret == 0);
 }
 
-void EventLoop::AddEvent(events::detail::IOEventBase* event) {
+void EventLoop::AddIOEvent(events::detail::IOEventBase* event) {
   auto target_fd = event->GetFd();
   events::detail::IOEventType event_type = event->GetIOEventType();
 
@@ -165,11 +165,8 @@ void EventLoop::FinishCoroutine(std::uint64_t coro_id) {
 }
 
 void EventLoop::Open() {
-
-}
-
-void EventLoop::Close() {
-
+  IOBase::Open();
+  fd_ = epoll_create1(0);
 }
 
 EventLoop& arc::coro::GetLocalEventLoop() {

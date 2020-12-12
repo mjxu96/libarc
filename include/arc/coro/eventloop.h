@@ -48,10 +48,11 @@ namespace coro {
 class EventLoop : public io::IOBase {
  public:
   EventLoop();
+  ~EventLoop() = default;
 
   bool IsDone();
   void Do();
-  void AddEvent(events::detail::IOEventBase*);
+  void AddIOEvent(events::detail::IOEventBase*);
 
   void AddCoroutine(events::CoroTaskEvent*);
   void FinishCoroutine(std::uint64_t coro_id);
@@ -60,7 +61,6 @@ class EventLoop : public io::IOBase {
   int total_added_task_num_{0};
 
   void Open() override;
-  void Close() override;
 
   std::unordered_map<int, std::queue<events::detail::IOEventBase*>> read_events_;
   std::unordered_map<int, std::queue<events::detail::IOEventBase*>> write_events_;

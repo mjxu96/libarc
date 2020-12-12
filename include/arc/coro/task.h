@@ -86,8 +86,7 @@ struct PromiseBase {
  public:
   PromiseBase() = default;
 
-  template <typename PromiseType>
-  void CreateAndAddCoroEvent(std::coroutine_handle<PromiseType> handle) {
+  void CreateAndAddCoroEvent(std::coroutine_handle<void> handle) {
     parent_task_ptr_->coro_event_.SetCoroutineHandle(handle);
     is_this_promise_added_to_coro_tasks_ = true;
     GetLocalEventLoop().AddCoroutine(&parent_task_ptr_->coro_event_);
@@ -159,10 +158,9 @@ class Task<void> : public detail::TaskBase {
   }
 
   // coro related
-  template <typename PromiseType>
   [[nodiscard]] std::coroutine_handle<promise_type> await_suspend(
-      std::coroutine_handle<PromiseType> parent_promise_handler) {
-    promise_->CreateAndAddCoroEvent<PromiseType>(parent_promise_handler);
+      std::coroutine_handle<void> parent_promise_handler) {
+    promise_->CreateAndAddCoroEvent(parent_promise_handler);
     return std::coroutine_handle<promise_type>::from_promise(
         *(static_cast<promise_type*>(promise_)));
   }
@@ -241,10 +239,9 @@ class Task : public detail::TaskBase {
   }
 
   // coro related
-  template <typename PromiseType>
   [[nodiscard]] std::coroutine_handle<promise_type> await_suspend(
-      std::coroutine_handle<PromiseType> parent_promise_handler) {
-    promise_->CreateAndAddCoroEvent<PromiseType>(parent_promise_handler);
+      std::coroutine_handle<void> parent_promise_handler) {
+    promise_->CreateAndAddCoroEvent(parent_promise_handler);
     return std::coroutine_handle<promise_type>::from_promise(
         *(static_cast<promise_type*>(promise_)));
   }
@@ -264,7 +261,6 @@ void RunUntilComplelete() {
   while (!event_loop.IsDone()) {
     event_loop.Do();
   }
-  std::cout << "finished" << std::endl;
 }
 
 void StartEventLoop(Task<void> task) {
