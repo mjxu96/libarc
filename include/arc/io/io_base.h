@@ -30,24 +30,24 @@
 #define LIBARC__IO__IO_BASE_H
 
 #include <unistd.h>
+
 #include <stdexcept>
 #include <system_error>
 
 namespace arc {
 namespace io {
+namespace detail {
 
 class IOBase {
  public:
-  IOBase(int fd);
+  IOBase() = default;
   virtual ~IOBase();
-  virtual void Open();
-  virtual void Close();
 
  protected:
   int fd_{-1};
-  bool is_open_{false};
 };
 
+}  // namespace detail
 }  // namespace io
 }  // namespace arc
 

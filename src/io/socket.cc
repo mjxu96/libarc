@@ -1,7 +1,7 @@
 /*
- * File: io_base.cc
+ * File: socket.cc
  * Project: libarc
- * File Created: Monday, 7th December 2020 10:38:11 pm
+ * File Created: Saturday, 12th December 2020 9:48:24 pm
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
@@ -26,14 +26,4 @@
  * IN THE SOFTWARE.
  */
 
-
-#include <arc/io/io_base.h>
-
-using namespace arc::io::detail;
-
-IOBase::~IOBase() {
-  if (fd_ >= 0) {
-    close(fd_);
-    fd_ = -1;
-  }
-}
+#include <arc/io/socket.h>

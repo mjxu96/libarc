@@ -1,7 +1,7 @@
 /*
- * File: io_base.cc
+ * File: utils.h
  * Project: libarc
- * File Created: Monday, 7th December 2020 10:38:11 pm
+ * File Created: Saturday, 12th December 2020 7:58:36 pm
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
@@ -26,14 +26,35 @@
  * IN THE SOFTWARE.
  */
 
+#ifndef LIBARC__NET__UTILS_H
+#define LIBARC__NET__UTILS_H
 
-#include <arc/io/io_base.h>
+#include <sys/socket.h>
 
-using namespace arc::io::detail;
+namespace arc {
+namespace net {
 
-IOBase::~IOBase() {
-  if (fd_ >= 0) {
-    close(fd_);
-    fd_ = -1;
-  }
-}
+enum class Domain {
+  UNSPEC = AF_UNSPEC,
+  UNIX = AF_UNIX,
+  IPV4 = AF_INET,
+  IPV6 = AF_INET6,
+};
+
+enum class SocketType {
+  UNKNOWN = 0U,
+  STREAM = SOCK_STREAM,
+  DATAGRAM = SOCK_DGRAM,
+  RAW = SOCK_RAW,
+  PACKET = SOCK_PACKET,
+};
+
+enum class Protocol {
+  AUTO = 0U,
+};
+
+} // namespace net
+} // namespace arc
+
+
+#endif /* LIBARC__NET__UTILS_H */

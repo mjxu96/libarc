@@ -45,7 +45,7 @@
 namespace arc {
 namespace coro {
 
-class EventLoop : public io::IOBase {
+class EventLoop : public io::detail::IOBase {
  public:
   EventLoop();
   ~EventLoop() = default;
@@ -59,8 +59,6 @@ class EventLoop : public io::IOBase {
 
  private:
   int total_added_task_num_{0};
-
-  void Open() override;
 
   std::unordered_map<int, std::queue<events::detail::IOEventBase*>>
       read_events_;

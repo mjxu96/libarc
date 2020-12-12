@@ -1,7 +1,7 @@
 /*
- * File: io_base.cc
+ * File: socket_example.cc
  * Project: libarc
- * File Created: Monday, 7th December 2020 10:38:11 pm
+ * File Created: Saturday, 12th December 2020 10:03:54 pm
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
@@ -26,14 +26,27 @@
  * IN THE SOFTWARE.
  */
 
+#include <arc/io/socket.h>
+using namespace arc::io;
 
-#include <arc/io/io_base.h>
+void ConnectTest() {
+  Socket sock;
+  std::cout << "123" << std::endl;
+  sock.Connect({"localhost", 8080});
+  std::cout << sock.Send("123") << std::endl;
+  std::cout << sock.Recv(3) << std::endl;
+}
 
-using namespace arc::io::detail;
+void AcceptTest() {
+  Socket sock;
+  sock.Bind({"localhost", 8081});
+  sock.Listen();
+  auto new_sock = sock.Accept();
+  auto recv = new_sock.Recv();
+  std::cout << recv << std::endl;
+  std::cout << new_sock.Send(recv) << std::endl;
+}
 
-IOBase::~IOBase() {
-  if (fd_ >= 0) {
-    close(fd_);
-    fd_ = -1;
-  }
+int main() {
+  AcceptTest();
 }
