@@ -6,17 +6,17 @@
  * -----
  * MIT License
  * Copyright (c) 2020 Minjun Xu
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
  * deal in the Software without restriction, including without limitation the
  * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
  * sell copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -26,8 +26,8 @@
  * IN THE SOFTWARE.
  */
 
-#include <arc/coro/task.h>
 #include <arc/arc.h>
+#include <arc/coro/task.h>
 
 #include <memory>
 
@@ -36,10 +36,10 @@ using namespace arc::coro;
 Task<int> InternalTask(int i) {
   // std::cout << "interanal " << i << std::endl;
   if (i < 0) {
-    std::string error = std::string("i cannot be smaller than 0, now is: ") + std::to_string(i);
+    std::string error =
+        std::string("i cannot be smaller than 0, now is: ") + std::to_string(i);
     throw std::logic_error(error.c_str());
-  }
-  else if (i == 0) {
+  } else if (i == 0) {
     co_return i;
   } else {
     co_return co_await InternalTask(i - 1) + i;
@@ -54,9 +54,7 @@ Task<std::unique_ptr<int>> TestMove(int i) {
   co_return std::make_unique<int>(i);
 }
 
-Task<void> TestException() {
-  throw std::logic_error("some error");
-}
+Task<void> TestException() { throw std::logic_error("some error"); }
 
 Task<void> TestFuture(int i) {
   i = co_await InternalTask(i);
@@ -82,22 +80,18 @@ Task<void> TestEmptyCoro() {
 
   try {
     co_await InternalTask(-100);
-  }
-  catch(const std::exception& e) {
+  } catch (const std::exception& e) {
     std::cerr << e.what() << '\n';
   }
 
   try {
     co_await TestException();
-  }
-  catch(const std::exception& e) {
+  } catch (const std::exception& e) {
     std::cerr << e.what() << '\n';
   }
 
-  
   co_return;
 }
-
 
 int test111() {
   int value = 0;
@@ -106,8 +100,6 @@ int test111() {
   }
   return value;
 }
-
-
 
 int main() {
   std::cout << "arc version: " << arc::Version() << std::endl;

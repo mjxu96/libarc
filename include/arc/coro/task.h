@@ -165,7 +165,9 @@ class Task<void> : public detail::TaskBase {
         *(static_cast<promise_type*>(promise_)));
   }
 
-  void await_resume() { Result(); }
+  void await_resume() {
+    Result();
+  }
 
   void Start() {
     auto handle = std::coroutine_handle<promise_type>::from_promise(
@@ -246,15 +248,15 @@ class Task : public detail::TaskBase {
         *(static_cast<promise_type*>(promise_)));
   }
 
-  T await_resume() { return Result(); }
+  T await_resume() {
+    return Result();
+  }
 
  private:
   T* ret_{nullptr};
 };
 
-void EnsureFuture(Task<void> task) {
-  task.Start();
-}
+void EnsureFuture(Task<void> task) { task.Start(); }
 
 void RunUntilComplelete() {
   auto& event_loop = GetLocalEventLoop();

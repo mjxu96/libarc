@@ -46,7 +46,8 @@ void LogDebug(LoggingFormatWrapper format, Args&&... args) {
 
 template <typename... Args>
 void LogInfo(LoggingFormatWrapper format, Args&&... args) {
-  default_logger->LogInternal(Level::INFO, format, std::forward<Args&&>(args)...);
+  default_logger->LogInternal(Level::INFO, format,
+                              std::forward<Args&&>(args)...);
 }
 
 template <typename... Args>
