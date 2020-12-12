@@ -1,7 +1,7 @@
 /*
- * File: io_event_base.h
+ * File: logging.cc
  * Project: libarc
- * File Created: Saturday, 12th December 2020 11:05:14 am
+ * File Created: Monday, 27th July 2020 10:13:46 pm
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
@@ -26,44 +26,27 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef LIBARC__CORO__EVENTS__IO_EVENT_BASE_H
-#define LIBARC__CORO__EVENTS__IO_EVENT_BASE_H
+#include <arc/logging/logging.h>
 
-#include <arc/coro/events/event_base.h>
-#include <assert.h>
-#include <unistd.h>
+std::unordered_map<std::string, mo::logging::Logger> loggers = {
+    {"", mo::logging::Logger("")}};
+mo::logging::Logger* mo::logging::default_logger = &loggers[""];
 
-#include <coroutine>
-#include <iostream>
+mo::logging::Logger& mo::logging::GetLogger(const std::string& name) {
+  if (loggers.find(name) == loggers.end()) {
+    loggers.insert({name, mo::logging::Logger(name)});
+  }
+  return loggers[name];
+}
 
-namespace arc {
-namespace events {
-namespace detail {
+void mo::logging::SetFormat(const std::string& format) {
+  default_logger->SetFormat(format);
+}
 
-enum class IOEventType {
-  NONE = 0U,
-  READ = 1U,
-  WRITE = 2U,
-};
+void mo::logging::SetSink(const std::ostream& out) {
+  default_logger->SetSink(out);
+}
 
-class IOEventBase : public EventBase {
- public:
-  IOEventBase(int fd, IOEventType event_type,
-              std::coroutine_handle<void> handle)
-      : EventBase(handle), fd_(fd), io_event_type_(event_type) {}
-
-  virtual ~IOEventBase() {}
-
-  inline int GetFd() const noexcept { return fd_; }
-  inline IOEventType GetIOEventType() const noexcept { return io_event_type_; }
-
- protected:
-  int fd_{-1};
-  IOEventType io_event_type_{IOEventType::NONE};
-};
-
-}  // namespace detail
-}  // namespace events
-}  // namespace arc
-
-#endif /* LIBARC__CORO__EVENTS__IO_EVENT_BASE_H */
+void mo::logging::SetLevel(mo::logging::Level level) {
+  default_logger->SetLevel(level);
+}

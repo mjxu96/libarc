@@ -30,12 +30,13 @@
 #define LIBARC__CONCEPT__CORO_H
 
 #include <type_traits>
+#include <concepts>
 
 namespace arc {
 namespace concepts {
     
 template<typename T>
-concept MoveableObjectOrVoid = std::is_void_v<T> || std::is_move_constructible_v<T> && std::is_move_assignable_v<T>;
+concept CopyableMoveableOrVoid = std::is_void_v<T> || std::copy_constructible<T> || std::move_constructible<T>;
 
 } // namespace concept
 } // namespace arc

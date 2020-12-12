@@ -1,7 +1,7 @@
 /*
- * File: io_event_base.h
+ * File: logger.cc
  * Project: libarc
- * File Created: Saturday, 12th December 2020 11:05:14 am
+ * File Created: Monday, 27th July 2020 8:56:01 pm
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
@@ -26,44 +26,15 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef LIBARC__CORO__EVENTS__IO_EVENT_BASE_H
-#define LIBARC__CORO__EVENTS__IO_EVENT_BASE_H
+#include <arc/logging/logger.h>
 
-#include <arc/coro/events/event_base.h>
-#include <assert.h>
-#include <unistd.h>
+using namespace mo::logging;
 
-#include <coroutine>
-#include <iostream>
-
-namespace arc {
-namespace events {
-namespace detail {
-
-enum class IOEventType {
-  NONE = 0U,
-  READ = 1U,
-  WRITE = 2U,
+const std::unordered_map<uint8_t, std::string> Logger::level_map_ = {
+    {(uint8_t)Level::DEBUG, "DEBUG"},     {(uint8_t)Level::INFO, "INFO"},
+    {(uint8_t)Level::WARNING, "WARNING"}, {(uint8_t)Level::ERROR, "ERROR"},
+    {(uint8_t)Level::FATAL, "FATAL"},
 };
 
-class IOEventBase : public EventBase {
- public:
-  IOEventBase(int fd, IOEventType event_type,
-              std::coroutine_handle<void> handle)
-      : EventBase(handle), fd_(fd), io_event_type_(event_type) {}
-
-  virtual ~IOEventBase() {}
-
-  inline int GetFd() const noexcept { return fd_; }
-  inline IOEventType GetIOEventType() const noexcept { return io_event_type_; }
-
- protected:
-  int fd_{-1};
-  IOEventType io_event_type_{IOEventType::NONE};
-};
-
-}  // namespace detail
-}  // namespace events
-}  // namespace arc
-
-#endif /* LIBARC__CORO__EVENTS__IO_EVENT_BASE_H */
+const std::vector<std::string> Logger::support_formats_ = {
+    "{%time}", "{%level}", "{%msg}", "{%filename}", "{%line}", "{%funcname}"};

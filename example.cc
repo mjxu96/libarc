@@ -28,12 +28,17 @@
 
 #include <arc/coro/task.h>
 
+#include <memory>
+
 using namespace arc::coro;
 
 Task<int> InternalTask(int i) {
   // std::cout << "interanal " << i << std::endl;
-  assert(i > -2);
-  if (i <= 0) {
+  if (i < 0) {
+    std::string error = std::string("i cannot be smaller than 0, now is: ") + std::to_string(i);
+    throw std::logic_error(error.c_str());
+  }
+  else if (i == 0) {
     co_return i;
   } else {
     co_return co_await InternalTask(i - 1) + i;
@@ -44,7 +49,24 @@ Task<int> InternalTask(int i) {
   // co_return (i >= 0 ? i : (co_await InternalTask(i - 1)));
 }
 
+Task<std::unique_ptr<int>> TestMove(int i) {
+  co_return std::make_unique<int>(i);
+}
+
+Task<void> TestException() {
+  throw std::logic_error("some error");
+}
+
+Task<void> TestFuture(int i) {
+  i = co_await InternalTask(i);
+  std::cout << i << std::endl;
+  co_return;
+}
+
 Task<void> TestEmptyCoro() {
+  for (int i = 0; i < 10; i++) {
+    EnsureFuture(TestFuture(i));
+  }
   int value = 0;
   // for (int i = 0; i < 1; i++) {
   for (int i = 0; i < 1000; i++) {
@@ -54,6 +76,24 @@ Task<void> TestEmptyCoro() {
   }
   std::cout << value << std::endl;
   std::cout << co_await InternalTask(1000) << std::endl;
+
+  // std::cout << *(co_await TestMove(123)) << std::endl;
+
+  try {
+    co_await InternalTask(-100);
+  }
+  catch(const std::exception& e) {
+    std::cerr << e.what() << '\n';
+  }
+
+  try {
+    co_await TestException();
+  }
+  catch(const std::exception& e) {
+    std::cerr << e.what() << '\n';
+  }
+
+  
   co_return;
 }
 
@@ -66,14 +106,7 @@ int test111() {
   return value;
 }
 
-void StartEventLoop(Task<void> task) {
-  task.Start();
-  auto& event_loop = GetLocalEventLoop();
-  while (!event_loop.IsDone()) {
-    event_loop.Do();
-  }
-  std::cout << "finished" << std::endl;
-}
+
 
 int main() {
   StartEventLoop(TestEmptyCoro());
