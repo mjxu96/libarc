@@ -49,6 +49,10 @@ class IOBase {
   IOBase(IOBase&& other);
   IOBase& operator=(IOBase&& other);
 
+  int GetFd() const {
+    return fd_;
+  }
+
  protected:
   int fd_{-1};
 

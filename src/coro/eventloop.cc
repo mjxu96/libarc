@@ -33,7 +33,7 @@ using namespace arc::coro;
 EventLoop::EventLoop() {
   fd_ = epoll_create1(0);
   if (fd_ < 0) {
-    throw std::system_error(errno, std::generic_category());
+    arc::utils::ThrowErrnoExceptions();
   }
 }
 
@@ -44,6 +44,7 @@ bool EventLoop::IsDone() {
 
 void EventLoop::Do() {
   // First we iterate over unfinished coroutine event
+  std::cout << "begin unfinished event" << std::endl;
   auto finished_coro_events_itr = finished_coro_events_.begin();
   while (finished_coro_events_itr != finished_coro_events_.end()) {
     (*finished_coro_events_itr)->Resume();
@@ -61,6 +62,7 @@ void EventLoop::Do() {
   epoll_event events[kMaxEventsSizePerWait];
   events::detail::IOEventBase* todo_events[kMaxEventsSizePerWait];
   int event_cnt = epoll_wait(fd_, events, kMaxEventsSizePerWait, -1);
+  std::cout << "after waiting" << std::endl;
   for (int i = 0; i < event_cnt; i++) {
     if ((events[i].events & EPOLLIN) != 0) {
       todo_events[i] = read_events_[events[i].data.fd].front();
@@ -111,11 +113,17 @@ void EventLoop::Do() {
         read_events_[target_fd].empty() ||
         to_delete_read_events.find(target_fd) != to_delete_read_events.end()) {
       epoll_ctl_ret = epoll_ctl(fd_, EPOLL_CTL_DEL, target_fd, NULL);
+      if (epoll_ctl_ret != 0) {
+        arc::utils::ThrowErrnoExceptions();
+      }
     } else {
       epoll_event e_event{};
       e_event.events = EPOLLET | EPOLLIN;
       e_event.data.fd = target_fd;
       epoll_ctl_ret = epoll_ctl(fd_, EPOLL_CTL_MOD, target_fd, &e_event);
+      if (epoll_ctl_ret != 0) {
+        arc::utils::ThrowErrnoExceptions();
+      }
     }
   }
 
@@ -125,7 +133,6 @@ void EventLoop::Do() {
 
   total_added_task_num_ -= event_cnt;
 
-  assert(epoll_ctl_ret == 0);
 }
 
 void EventLoop::AddIOEvent(events::detail::IOEventBase* event) {
@@ -158,10 +165,9 @@ void EventLoop::AddIOEvent(events::detail::IOEventBase* event) {
   e_event.events = epoll_related_events;
   e_event.data.fd = target_fd;
   int ret = epoll_ctl(fd_, EPOLL_CTL_ADD, target_fd, &e_event);
-  assert(ret == 0);
   if (ret != 0) {
     // TODO add warning here.
-    std::cout << errno << std::endl;
+    arc::utils::ThrowErrnoExceptions();
   }
 }
 

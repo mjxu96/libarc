@@ -27,6 +27,7 @@
  */
 
 #include <arc/io/io_base.h>
+#include <iostream>
 
 using namespace arc::io::detail;
 

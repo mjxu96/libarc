@@ -39,13 +39,13 @@ void ConnectTest() {
 }
 
 void HandleClient(
-    Socket<Domain::IPV4, SocketType::STREAM, Protocol::AUTO>&& client) {
+    Socket<Domain::IPV4, Protocol::TCP, Pattern::SYNC> client) {
   auto recv = client.Recv();
   std::cout << recv << std::endl;
   std::cout << client.Send(recv) << std::endl;
 }
 
-void MoveTest(Socket<Domain::IPV4, SocketType::STREAM, Protocol::AUTO>&& sock) {
+void MoveTest(Socket<Domain::IPV4, Protocol::TCP> sock) {
   int cnt = 0;
   while (cnt < 5) {
     auto new_sock = sock.Accept();
@@ -55,9 +55,10 @@ void MoveTest(Socket<Domain::IPV4, SocketType::STREAM, Protocol::AUTO>&& sock) {
 }
 
 void AcceptTest() {
-  Socket<Domain::IPV4> sock;
-  sock.Bind({"localhost", 8081});
+  Socket<Domain::IPV4, Protocol::TCP, Pattern::SYNC> sock;
+  sock.Bind({"localhost", 8082});
   sock.Listen();
+  sock.SetNonBlocking(false);
   MoveTest(std::move(sock));
 }
 

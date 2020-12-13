@@ -41,6 +41,7 @@
 #include <arc/coro/events/coro_task_event.h>
 #include <arc/coro/events/io_event_base.h>
 #include <arc/io/io_base.h>
+#include <arc/utils/exception.h>
 
 namespace arc {
 namespace coro {

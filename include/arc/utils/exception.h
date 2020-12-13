@@ -1,7 +1,7 @@
 /*
- * File: utils.h
+ * File: exception.h
  * Project: libarc
- * File Created: Saturday, 12th December 2020 7:58:36 pm
+ * File Created: Sunday, 13th December 2020 3:29:00 pm
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
@@ -26,45 +26,27 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef LIBARC__NET__UTILS_H
-#define LIBARC__NET__UTILS_H
+#ifndef LIBARC__UTILS__EXCEPTION_H
+#define LIBARC__UTILS__EXCEPTION_H
 
-#include <sys/socket.h>
+#include <experimental/source_location>
+#include <system_error>
+#include <iostream>
 
 namespace arc {
-namespace net {
+namespace utils {
 
-enum class Domain {
-  UNSPEC = AF_UNSPEC,
-  UNIX = AF_UNIX,
-  IPV4 = AF_INET,
-  IPV6 = AF_INET6,
-};
+inline void ThrowErrnoExceptions(
+    const std::experimental::source_location& source_location =
+        std::experimental::source_location::current()) {
+  const std::string file_name = std::string(source_location.file_name());
+  const std::string report = file_name.substr(file_name.find_last_of('/') + 1) + ":L" +
+                             std::to_string(source_location.line()) + ":" +
+                             std::string(source_location.function_name());
+  throw std::system_error(errno, std::generic_category(), report);
+}
 
-enum class SocketType {
-  UNKNOWN = 0U,
-  STREAM = SOCK_STREAM,
-  DATAGRAM = SOCK_DGRAM,
-  RAW = SOCK_RAW,
-  PACKET = SOCK_PACKET,
-};
-
-enum class Protocol {
-  AUTO = 0U,
-  TCP = 1U,
-  UDP = 2U,
-};
-
-enum class SocketLevel {
-  SOCKET = SOL_SOCKET,
-};
-
-enum class SocketOption {
-  REUSEADDR = SO_REUSEADDR,
-  REUSEPORT = SO_REUSEPORT,
-};
-
-}  // namespace net
+}  // namespace utils
 }  // namespace arc
 
-#endif /* LIBARC__NET__UTILS_H */
+#endif /* LIBARC__UTILS__EXCEPTION_H */

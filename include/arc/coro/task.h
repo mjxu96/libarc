@@ -44,7 +44,7 @@ namespace arc {
 namespace coro {
 
 template <arc::concepts::CopyableMoveableOrVoid T>
-class Task;
+class [[nodiscard]] Task;
 
 namespace detail {
 
@@ -106,6 +106,9 @@ struct PromiseBase {
   }
 
   void unhandled_exception() {
+    if (!is_this_promise_added_to_coro_tasks_) {
+      std::rethrow_exception(std::current_exception());
+    }
     parent_task_ptr_->ret_exception_ptr_ = std::current_exception();
     parent_task_ptr_->return_type_ = CoroReturnValueType::EXCEPTION;
   }
@@ -117,7 +120,7 @@ struct PromiseBase {
 }  // namespace detail
 
 template <>
-class Task<void> : public detail::TaskBase {
+class [[nodiscard]] Task<void> : public detail::TaskBase {
  public:
   struct promise_type : public detail::PromiseBase {
     void return_void() {
@@ -178,7 +181,7 @@ class Task<void> : public detail::TaskBase {
 };
 
 template <arc::concepts::CopyableMoveableOrVoid T>
-class Task : public detail::TaskBase {
+class [[nodiscard]] Task : public detail::TaskBase {
  public:
   struct promise_type : public detail::PromiseBase {
     template <std::move_constructible U = T>

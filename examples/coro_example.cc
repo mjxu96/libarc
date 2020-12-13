@@ -90,6 +90,8 @@ Task<void> TestEmptyCoro() {
     std::cerr << e.what() << '\n';
   }
 
+  throw std::logic_error("som");
+
   co_return;
 }
 
@@ -103,6 +105,15 @@ int test111() {
 
 int main() {
   std::cout << "arc version: " << arc::Version() << std::endl;
+  try
+  {
+    /* code */
   StartEventLoop(TestEmptyCoro());
+  }
+  catch(const std::exception& e)
+  {
+    std::cerr << e.what() << '\n';
+  }
+  
   // test111();
 }

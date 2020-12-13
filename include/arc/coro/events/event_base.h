@@ -30,8 +30,7 @@
 #define LIBARC__CORO__EVENTS__EVENT_BASE_H
 
 #include <unistd.h>
-
-#include <iostream>
+#include <cassert>
 
 namespace arc {
 namespace events {
