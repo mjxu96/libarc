@@ -32,13 +32,13 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
+#include <arc/utils/nameof.hpp>
 #include <cassert>
 #include <cstring>
 #include <stdexcept>
 #include <string>
 
 #include "utils.h"
-#include <arc/utils/nameof.hpp>
 
 namespace arc {
 namespace net {
@@ -50,8 +50,8 @@ class Address {
 
   Address(const std::string& host, std::uint16_t port)
       : host_(host), port_(port) {
-    addr_.sin_port = htons(port_);
     if constexpr (AF == Domain::IPV4) {
+      addr_.sin_port = htons(port_);
       if (inet_pton(AF_INET, host_.data(), &addr_.sin_addr) > 0) {
         is_valid_ = true;
         addr_.sin_family = AF_INET;
@@ -59,9 +59,10 @@ class Address {
         InitDnsAddress(host, port);
       }
     } else if constexpr (AF == Domain::IPV6) {
-      if (inet_pton(AF_INET, host_.data(), &addr_.sin_addr) > 0) {
+      addr_.sin6_port = htons(port_);
+      if (inet_pton(AF_INET6, host_.data(), &addr_.sin6_addr) > 0) {
         is_valid_ = true;
-        addr_.sin_family = AF_INET;
+        addr_.sin6_family = AF_INET6;
       } else {
         InitDnsAddress(host, port);
       }
@@ -70,7 +71,15 @@ class Address {
     }
   }
 
-  Address(const sockaddr_in& addr) { Init(addr); }
+  template <Domain UAF = AF>
+  requires(UAF == Domain::IPV4) Address(const sockaddr_in& addr) {
+    Init(addr);
+  }
+
+  template <Domain UAF = AF>
+  requires(UAF == Domain::IPV6) Address(const sockaddr_in6& addr) {
+    Init(addr);
+  }
 
   // TODO throw exception when the address is invalid.
   const sockaddr* GetCStyleAddress() const { return (sockaddr*)&addr_; }
@@ -84,26 +93,41 @@ class Address {
   const uint16_t GetPort() const { return port_; }
 
  private:
-  void Init(const sockaddr_in& addr, bool is_from_dns = false) {
+  using CAddressType = typename std::conditional_t<(AF == Domain::IPV4),
+                                                   sockaddr_in, sockaddr_in6>;
+
+  void Init(const CAddressType& addr, bool is_from_dns = false) {
+    if (((int)AF) != ((sockaddr*)&addr)->sa_family) {
+      throw std::logic_error("Trying to attch a " +
+                             std::string(nameof::nameof_enum<Domain>(
+                                 (Domain)((sockaddr*)&addr)->sa_family)) +
+                             " address with a " +
+                             std::string(nameof::nameof_enum<Domain>(AF)) +
+                             " address");
+    }
     addr_ = addr;
     char tmp[INET6_ADDRSTRLEN];
-    switch (addr.sin_family) {
-      case AF_INET:
-        inet_ntop(AF_INET, &(addr.sin_addr), tmp, INET_ADDRSTRLEN);
-        break;
-
-      case AF_INET6:
-        inet_ntop(AF_INET6, &(addr.sin_addr), tmp, INET6_ADDRSTRLEN);
-        break;
-      default:
-        is_valid_ = false;
-        return;
+    if constexpr (AF == Domain::IPV4) {
+      inet_ntop(AF_INET, &(addr_.sin_addr), tmp, INET_ADDRSTRLEN);
+    } else if constexpr (AF == Domain::IPV6) {
+      inet_ntop(AF_INET6, &(addr_.sin6_addr), tmp, INET6_ADDRSTRLEN);
+    } else {
+      is_valid_ = false;
+      return;
     }
     host_ = tmp;
     if (is_from_dns) {
-      port_ = ntohs(addr_.sin_port);
+      if constexpr (AF == Domain::IPV4) {
+        port_ = ntohs(addr_.sin_port);
+      } else if constexpr (AF == Domain::IPV6) {
+        port_ = ntohs(addr_.sin6_port);
+      }
     } else {
-      port_ = addr_.sin_port;
+      if constexpr (AF == Domain::IPV4) {
+        port_ = addr_.sin_port;
+      } else if constexpr (AF == Domain::IPV6) {
+        port_ = addr_.sin6_port;
+      }
     }
     is_valid_ = true;
   }
@@ -119,7 +143,7 @@ class Address {
     int s = getaddrinfo(host.c_str(), std::to_string(port).c_str(), &hints,
                         &result);
     if (s == 0 && result != nullptr) {
-      Init(*((struct sockaddr_in*)result->ai_addr), true);
+      Init(*((CAddressType*)(result->ai_addr)), true);
       freeaddrinfo(result);
     } else {
       freeaddrinfo(result);
@@ -132,7 +156,7 @@ class Address {
   bool is_valid_{false};
   std::string host_{};
   uint16_t port_{};
-  sockaddr_in addr_{};
+  CAddressType addr_{};
 };
 
 }  // namespace net

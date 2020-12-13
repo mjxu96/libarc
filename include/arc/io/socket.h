@@ -62,6 +62,25 @@ class SocketBase : public IOBase {
     buffer_ = new char[kRecvBufferSize_];
   }
 
+  SocketBase(const SocketBase&) = delete;
+  SocketBase& operator=(const SocketBase&) = delete;
+
+  SocketBase(SocketBase&& other) {
+    buffer_ = new char[kRecvBufferSize_];
+    std::memcpy(buffer_, other.buffer_, other.kRecvBufferSize_);
+    addr_ = std::move(other.addr_);
+  }
+
+  SocketBase& operator=(SocketBase&& other) {
+    IOBase::MoveFrom(std::move(other));
+    if (!buffer_) {
+      buffer_ = new char[kRecvBufferSize_];
+    }
+    std::memcpy(buffer_, other.buffer_, other.kRecvBufferSize_);
+    addr_ = std::move(other.addr_);
+    return *this;
+  }
+
   ~SocketBase() { delete[] buffer_; }
 
   void Bind(const net::Address<AF>& addr) {
@@ -72,6 +91,10 @@ class SocketBase : public IOBase {
   }
 
  protected:
+  using CAddressType =
+      typename std::conditional_t<(AF == arc::net::Domain::IPV4), sockaddr_in,
+                                  sockaddr_in6>;
+
   net::Address<AF> addr_{};
   const int kRecvBufferSize_{1024};
   char* buffer_{nullptr};
@@ -89,6 +112,27 @@ class SocketBase : public IOBase {
 
   template <net::Domain UAF>
   std::string InternalRecvFrom(int max_recv_bytes, net::Address<UAF>* addr) {
+    if (addr) {
+      // Call UDP::RecvFrom
+      if (max_recv_bytes < 0) {
+        throw std::logic_error(
+            "Calling UDP's RecvFrom function should spcifiy the receiving "
+            "bytes.");
+      }
+      sockaddr in_addr;
+      socklen_t in_addr_len;
+      std::string ret;
+      ret.reserve(max_recv_bytes);
+      ssize_t tmp_read = recvfrom(this->fd_, ret.data(), max_recv_bytes, 0,
+                                  &in_addr, &in_addr_len);
+      if (tmp_read == -1) {
+        throw std::system_error(errno, std::generic_category());
+      }
+      (*addr) = *((CAddressType*)(&in_addr));
+      return ret;
+    }
+
+    // Call TCP::Recv
     std::string buffer;
     max_recv_bytes = (max_recv_bytes < 0
                           ? std::numeric_limits<decltype(max_recv_bytes)>::max()
@@ -155,8 +199,9 @@ class Socket<AF, net::SocketType::STREAM, P>
   }
 
   Socket Accept() {
-    sockaddr_in in_addr;
-    int addrlen = sizeof(in_addr);
+    typename detail::SocketBase<AF, net::SocketType::STREAM, P>::CAddressType
+        in_addr;
+    socklen_t addrlen = sizeof(in_addr);
     int accept_fd =
         accept(this->fd_, (struct sockaddr*)&in_addr, (socklen_t*)&addrlen);
     if (accept_fd < 0) {
@@ -171,8 +216,17 @@ template <net::Domain AF, net::Protocol P>
 class Socket<AF, net::SocketType::DATAGRAM, P>
     : public detail::SocketBase<AF, net::SocketType::STREAM, P> {
  public:
-  int SendTo(const std::string& data, const net::Address<AF>& addr);
-  std::pair<net::Address<AF>, std::string> RecvFrom(int max_recv_bytes = -1);
+  int SendTo(const std::string& data, const net::Address<AF>& addr) {
+    return this->template InternalSendTo<AF>(data, &addr);
+  }
+  std::pair<net::Address<AF>, std::string> RecvFrom(int max_recv_bytes = -1) {
+    std::pair<net::Address<AF>, std::string> ret =
+        std::make_pair<net::Address<AF>, std::string>({}, {});
+    // TODO complete UDP implementation of InternalFrom
+    ret.second =
+        this->template InternalRecvFrom<AF>(max_recv_bytes, &(ret.first));
+    return ret;
+  }
 };
 
 }  // namespace io

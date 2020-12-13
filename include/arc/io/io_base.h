@@ -43,8 +43,17 @@ class IOBase {
   IOBase() = default;
   virtual ~IOBase();
 
+  IOBase(const IOBase&) = delete;
+  IOBase& operator=(const IOBase&) = delete;
+
+  IOBase(IOBase&& other);
+  IOBase& operator=(IOBase&& other);
+
  protected:
   int fd_{-1};
+
+ private:
+  void MoveFrom(IOBase&& other);
 };
 
 }  // namespace detail
