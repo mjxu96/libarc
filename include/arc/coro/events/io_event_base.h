@@ -30,7 +30,9 @@
 #define LIBARC__CORO__EVENTS__IO_EVENT_BASE_H
 
 #include <arc/coro/events/event_base.h>
+#include <arc/io/utils.h>
 #include <assert.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 #include <coroutine>
@@ -40,26 +42,40 @@ namespace arc {
 namespace events {
 namespace detail {
 
-enum class IOEventType {
-  NONE = 0U,
-  READ = 1U,
-  WRITE = 2U,
-};
+enum class IOEventType { READ = 0U, WRITE = 1U };
 
 class IOEventBase : public EventBase {
  public:
-  IOEventBase(int fd, IOEventType event_type,
-              std::coroutine_handle<void> handle)
-      : EventBase(handle), fd_(fd), io_event_type_(event_type) {}
+  IOEventBase(int fd, io::IOType io_type, std::coroutine_handle<void> handle)
+      : EventBase(handle), fd_(fd), io_type_(io_type) {
+    if (io_type == io::IOType::READ || io_type == io::IOType::ACCEPT) {
+      io_event_type_ = detail::IOEventType::READ;
+      if (io_type == io::IOType::ACCEPT) {
+        should_remove_everytime_ = false;
+      }
+    } else {
+      io_event_type_ = detail::IOEventType::WRITE;
+    }
+  }
 
   virtual ~IOEventBase() {}
 
   inline int GetFd() const noexcept { return fd_; }
-  inline IOEventType GetIOEventType() const noexcept { return io_event_type_; }
+  inline detail::IOEventType GetIOEventType() const noexcept {
+    return io_event_type_;
+  }
+  inline io::IOType GetIOType() const noexcept {
+    return io_type_;
+  }
+  inline bool ShouldRemoveEveryTime() const noexcept {
+    return should_remove_everytime_;
+  }
 
  protected:
   int fd_{-1};
-  IOEventType io_event_type_{IOEventType::NONE};
+  io::IOType io_type_{};
+  detail::IOEventType io_event_type_{};
+  bool should_remove_everytime_{true};
 };
 
 }  // namespace detail

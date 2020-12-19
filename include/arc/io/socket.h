@@ -30,7 +30,8 @@
 #define LIBARC__IO__SOCKET_H
 
 #include <arc/io/utils.h>
-// #include <arc/coro/awaiter/io_awaiter.h>
+#include <arc/coro/eventloop.h>
+#include <arc/coro/events/io_event_base.h>
 #include <arc/net/address.h>
 #include <arc/utils/exception.h>
 #include <fcntl.h>
@@ -43,27 +44,10 @@
 #include "io_base.h"
 
 namespace arc {
-
-namespace io {
-template <net::Domain AF, net::Protocol P, Pattern PP>
-class Socket;
-
-}  // namespace io
-
 namespace coro {
-
-namespace detail {
-
-enum class IOType {
-  READ = 0U,
-  WRITE = 1U,
-  ACCEPT = 2U,
-  CONNECT = 3U,
-};
-
-}  // namespace detail
-template <net::Domain AF, net::Protocol P, detail::IOType T>
+template <net::Domain AF, net::Protocol P, io::IOType T>
 class IOAwaiter;
+
 }  // namespace coro
 
 namespace io {
@@ -121,6 +105,7 @@ class SocketBase : public IOBase {
     if (bind(this->fd_, addr_.GetCStyleAddress(), addr_.AddressSize()) < 0) {
       arc::utils::ThrowErrnoExceptions();
     }
+    is_bound_ = true;
   }
 
   void SetOption(arc::net::SocketOption option_name, int opt_value) {
@@ -155,6 +140,7 @@ class SocketBase : public IOBase {
   const int kRecvBufferSize_{1024};
   char* buffer_{nullptr};
   bool is_non_blocking_{false};
+  bool is_bound_{false};
 
   template <net::Domain UAF>
   int InternalSendTo(const std::string& data, const net::Address<UAF>* addr) {
@@ -226,39 +212,155 @@ class SocketBase : public IOBase {
 
 template <net::Domain AF = net::Domain::IPV4,
           net::Protocol P = net::Protocol::TCP, Pattern PP = Pattern::SYNC>
-class Socket : public detail::SocketBase<AF, net::SocketType::STREAM, P> {
- public:
-  Socket() : detail::SocketBase<AF, net::SocketType::STREAM, P>() {
-    if constexpr (PP == Pattern::ASYNC) {
-      this->template SetNonBlocking(true);
-    }
-  }
-  Socket(int fd, const net::Address<AF>& in_addr)
-      : detail::SocketBase<AF, net::SocketType::STREAM, P>(fd, in_addr) {
-    if constexpr (PP == Pattern::ASYNC) {
-      this->template SetNonBlocking(true);
-    }
-  }
-  ~Socket() = default;
-};
-
-// TCP specilization
-template <net::Domain AF, Pattern PP>
-class Socket<AF, net::Protocol::TCP, PP>
-    : public detail::SocketBase<AF, net::SocketType::STREAM,
-                                net::Protocol::TCP> {
+class Socket : public detail::SocketBase<AF,
+                                         ((P == net::Protocol::TCP)
+                                              ? net::SocketType::STREAM
+                                              : net::SocketType::DATAGRAM),
+                                         P> {
  public:
   Socket()
-      : detail::SocketBase<AF, net::SocketType::STREAM, net::Protocol::TCP>() {
+      : detail::SocketBase<AF,
+                           ((P == net::Protocol::TCP)
+                                ? net::SocketType::STREAM
+                                : net::SocketType::DATAGRAM),
+                           P>() {
     if constexpr (PP == Pattern::ASYNC) {
       this->template SetNonBlocking(true);
     }
   }
   Socket(int fd, const net::Address<AF>& in_addr)
-      : detail::SocketBase<AF, net::SocketType::STREAM, net::Protocol::TCP>(
-            fd, in_addr) {
+      : detail::SocketBase<AF,
+                           ((P == net::Protocol::TCP)
+                                ? net::SocketType::STREAM
+                                : net::SocketType::DATAGRAM),
+                           P>(fd, in_addr) {
     if constexpr (PP == Pattern::ASYNC) {
       this->template SetNonBlocking(true);
+    }
+  }
+  Socket(const Socket&) = delete;
+  Socket& operator=(const Socket&) = delete;
+  Socket(Socket&& other)
+      : detail::SocketBase<AF,
+                           ((P == net::Protocol::TCP)
+                                ? net::SocketType::STREAM
+                                : net::SocketType::DATAGRAM),
+                           P>(std::move(other)) {}
+
+  Socket& operator=(Socket&& other) {
+    detail::SocketBase<AF,
+                       ((P == net::Protocol::TCP) ? net::SocketType::STREAM
+                                                  : net::SocketType::DATAGRAM),
+                       P>::operator=(std::move(other));
+    return *this;
+  }
+
+  template <net::Protocol UP = P, Pattern UPP = PP>
+      requires(UP == net::Protocol::TCP) &&
+      (UPP == Pattern::SYNC) int Send(const std::string& data) {
+    return InternalSend(data);
+  }
+
+  template <Pattern UP = PP>
+  requires(UP == Pattern::ASYNC)
+      coro::IOAwaiter<AF, net::Protocol::TCP, io::IOType::WRITE> Send(
+          const std::string& data) {
+    return {this, (void*)&data};
+  }
+
+  template <net::Protocol UP = P, Pattern UPP = PP>
+      requires(UP == net::Protocol::TCP) && (UPP == Pattern::SYNC) std::string
+      Recv(int max_recv_bytes = -1) {
+    return InternalRecv(max_recv_bytes);
+  }
+
+  template <net::Protocol UP = P, Pattern UPP = PP>
+      requires(UP == net::Protocol::TCP) &&
+      (UPP == Pattern::ASYNC)
+          coro::IOAwaiter<AF, net::Protocol::TCP,
+                          io::IOType::READ> Recv(int max_recv_bytes =
+                                                               -1) {
+    return {this, max_recv_bytes};
+  }
+
+  template <net::Protocol UP = P, Pattern UPP = PP>
+      requires(UP == net::Protocol::TCP) &&
+      (UPP == Pattern::SYNC) void Connect(const net::Address<AF>& addr) {
+    return InternalConnect(addr);
+  }
+
+  template <net::Protocol UP = P, Pattern UPP = PP>
+      requires(UP == net::Protocol::TCP) &&
+      (UPP == Pattern::ASYNC) coro::IOAwaiter<
+          AF, net::Protocol::TCP,
+          io::IOType::CONNECT> Connect(const net::Address<AF>& addr) {
+    return {this, (void*)&addr};
+  }
+
+
+
+  // UDP
+
+  template <net::Protocol UP = P, Pattern UPP = PP>
+      requires(UP == net::Protocol::UDP) &&
+      (UPP == Pattern::SYNC) int SendTo(const std::string& data,
+                                        const net::Address<AF>& addr) {
+    return this->template InternalSendTo<AF>(data, &addr);
+  }
+
+  template <net::Protocol UP = P, Pattern UPP = PP>
+      requires(UP == net::Protocol::UDP) &&
+      (UPP == Pattern::SYNC) std::pair<net::Address<AF>, std::string> RecvFrom(
+          int max_recv_bytes = -1) {
+    std::pair<net::Address<AF>, std::string> ret =
+        std::make_pair<net::Address<AF>, std::string>({}, {});
+    // TODO complete UDP implementation of InternalFrom
+    ret.second =
+        this->template InternalRecvFrom<AF>(max_recv_bytes, &(ret.first));
+    return ret;
+  }
+
+  friend class arc::coro::IOAwaiter<AF, P, io::IOType::CONNECT>;
+  friend class arc::coro::IOAwaiter<AF, P, io::IOType::READ>;
+  friend class arc::coro::IOAwaiter<AF, P, io::IOType::WRITE>;
+
+ private:
+  template <net::Protocol UP = P>
+  requires(UP == net::Protocol::TCP) int InternalSend(const std::string& data) {
+    return this->template InternalSendTo<AF>(data, nullptr);
+  }
+
+  template <net::Protocol UP = P>
+  requires(UP == net::Protocol::TCP) std::string
+      InternalRecv(int max_recv_bytes = -1) {
+    return this->template InternalRecvFrom<AF>(max_recv_bytes, nullptr);
+  }
+
+  template <net::Protocol UP = P>
+  requires(UP == net::Protocol::TCP) void InternalConnect(
+      const net::Address<AF>& addr) {
+    int res = connect(this->fd_, addr.GetCStyleAddress(), addr.AddressSize());
+    if (res < 0) {
+      arc::utils::ThrowErrnoExceptions();
+    }
+  }
+};
+
+template <net::Domain AF = net::Domain::IPV4,
+          Pattern PP = Pattern::SYNC>
+class Acceptor : public Socket<AF, net::Protocol::TCP, PP> {
+ public:
+  Acceptor() : Socket<AF, net::Protocol::TCP, PP>() {}
+  Acceptor(Acceptor&& other) : Socket<AF, net::Protocol::TCP, PP>(std::move(other)) {}
+  Acceptor& operator=(Acceptor&& other) {
+    Socket<AF, net::Protocol::TCP, PP>::operator=(std::move(other));
+    return *this;
+  }
+  ~Acceptor() {
+    if constexpr (PP == Pattern::ASYNC) {
+      if (is_listened_) {
+        arc::coro::GetLocalEventLoop().RemoveIOEvent(this->fd_, io::IOType::ACCEPT, true);
+      }
     }
   }
 
@@ -266,81 +368,54 @@ class Socket<AF, net::Protocol::TCP, PP>
     if (listen(this->fd_, max_pending_connections) < 0) {
       arc::utils::ThrowErrnoExceptions();
     }
+    is_listened_ = true;
   }
 
-  template <Pattern UP = PP>
-  requires(UP == Pattern::SYNC) int Send(const std::string& data) {
-    return InternalSend(data);
-  }
-
-  template <Pattern UP = PP>
-  requires(UP == Pattern::ASYNC)
-      coro::IOAwaiter<AF, net::Protocol::TCP, coro::detail::IOType::WRITE> Send(
-          const std::string& data) {
-    return {this, (void*)&data};
-  }
-
-  template <Pattern UP = PP>
-  requires(UP == Pattern::SYNC) std::string Recv(int max_recv_bytes = -1) {
-    return InternalRecv(max_recv_bytes);
-  }
-
-  template <Pattern UP = PP>
-  requires(UP == Pattern::ASYNC)
-      coro::IOAwaiter<AF, net::Protocol::TCP, coro::detail::IOType::READ> Recv(
-          int max_recv_bytes = -1) {
-    return {this, (void*)&max_recv_bytes};
-  }
-
-  template <Pattern UP = PP>
-  requires(UP == Pattern::SYNC) void Connect(const net::Address<AF>& addr) {
-    return InternalConnect(addr);
-  }
-
-  template <Pattern UP = PP>
-  requires(UP == Pattern::ASYNC) coro::IOAwaiter<
-      AF, net::Protocol::TCP,
-      coro::detail::IOType::CONNECT> Connect(const net::Address<AF>& addr) {
-    return {this, (void*)&addr};
-  }
-
-  template <Pattern UP = PP>
-  requires(UP == Pattern::SYNC) Socket Accept() {
+  template <Pattern UPP = PP>
+      requires(UPP == Pattern::SYNC) Socket<AF, net::Protocol::TCP, PP>
+      Accept() {
     return InternalAccept();
   }
 
-  template <Pattern UP = PP>
-  requires(UP == Pattern::ASYNC) coro::IOAwaiter<
-      AF, net::Protocol::TCP, coro::detail::IOType::ACCEPT> Accept() {
+  template <Pattern UPP = PP>
+      requires(UPP ==
+       Pattern::ASYNC) coro::IOAwaiter<AF, net::Protocol::TCP,
+                                       io::IOType::ACCEPT> Accept() {
     return {this, nullptr};
   }
 
-  friend class arc::coro::IOAwaiter<AF, net::Protocol::TCP,
-                                    coro::detail::IOType::ACCEPT>;
-  friend class arc::coro::IOAwaiter<AF, net::Protocol::TCP,
-                                    coro::detail::IOType::CONNECT>;
-  friend class arc::coro::IOAwaiter<AF, net::Protocol::TCP,
-                                    coro::detail::IOType::READ>;
-  friend class arc::coro::IOAwaiter<AF, net::Protocol::TCP,
-                                    coro::detail::IOType::WRITE>;
-
+  friend class arc::coro::IOAwaiter<AF, net::Protocol::TCP, io::IOType::ACCEPT>;
  private:
-  int InternalSend(const std::string& data) {
-    return this->template InternalSendTo<AF>(data, nullptr);
-  }
+  std::queue<Socket<AF, net::Protocol::TCP, PP>> cached_incoming_sockets_{};
 
-  std::string InternalRecv(int max_recv_bytes = -1) {
-    return this->template InternalRecvFrom<AF>(max_recv_bytes, nullptr);
-  }
-
-  void InternalConnect(const net::Address<AF>& addr) {
-    int res = connect(this->fd_, addr.GetCStyleAddress(), addr.AddressSize());
-    if (res < 0) {
-      arc::utils::ThrowErrnoExceptions();
+  template<io::Pattern UPP = PP> requires(UPP == io::Pattern::ASYNC) 
+  Socket<AF, net::Protocol::TCP, UPP> GetNextAvailableSocket() {
+    if (!cached_incoming_sockets_.empty()) {
+      Socket<AF, net::Protocol::TCP, PP> next_socket = std::move(cached_incoming_sockets_.front());
+      cached_incoming_sockets_.pop();
+      return std::move(next_socket);
     }
+    typename detail::SocketBase<AF, net::SocketType::STREAM,
+                                net::Protocol::TCP>::CAddressType in_addr;
+    socklen_t addrlen = sizeof(in_addr);
+    int accept_fd = 0;
+    while (accept_fd == 0) {
+      int accept_fd =
+          accept(this->fd_, (struct sockaddr*)&in_addr, (socklen_t*)&addrlen);
+      if (accept_fd < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+        arc::utils::ThrowErrnoExceptions();
+      }
+      if (accept_fd < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        break;
+      }
+      cached_incoming_sockets_.emplace(accept_fd, in_addr);
+    }
+    Socket<AF, net::Protocol::TCP, PP> next_socket = std::move(cached_incoming_sockets_.front());
+    cached_incoming_sockets_.pop();
+    return std::move(next_socket);
   }
 
-  Socket InternalAccept() {
+  Socket<AF, net::Protocol::TCP, PP> InternalAccept() {
     typename detail::SocketBase<AF, net::SocketType::STREAM,
                                 net::Protocol::TCP>::CAddressType in_addr;
     socklen_t addrlen = sizeof(in_addr);
@@ -351,33 +426,8 @@ class Socket<AF, net::Protocol::TCP, PP>
     }
     return Socket<AF, net::Protocol::TCP, PP>(accept_fd, in_addr);
   }
-};
-
-// UDP specilization
-template <net::Domain AF, Pattern PP>
-class Socket<AF, net::Protocol::UDP, PP>
-    : public detail::SocketBase<AF, net::SocketType::DATAGRAM,
-                                net::Protocol::UDP> {
- public:
-  int SendTo(const std::string& data, const net::Address<AF>& addr) {
-    return this->template InternalSendTo<AF>(data, &addr);
-  }
-  std::pair<net::Address<AF>, std::string> RecvFrom(int max_recv_bytes = -1) {
-    std::pair<net::Address<AF>, std::string> ret =
-        std::make_pair<net::Address<AF>, std::string>({}, {});
-    // TODO complete UDP implementation of InternalFrom
-    ret.second =
-        this->template InternalRecvFrom<AF>(max_recv_bytes, &(ret.first));
-    return ret;
-  }
-  friend class arc::coro::IOAwaiter<AF, net::Protocol::UDP,
-                                    coro::detail::IOType::ACCEPT>;
-  friend class arc::coro::IOAwaiter<AF, net::Protocol::UDP,
-                                    coro::detail::IOType::CONNECT>;
-  friend class arc::coro::IOAwaiter<AF, net::Protocol::UDP,
-                                    coro::detail::IOType::READ>;
-  friend class arc::coro::IOAwaiter<AF, net::Protocol::UDP,
-                                    coro::detail::IOType::WRITE>;
+ private:
+  bool is_listened_{false};
 };
 
 }  // namespace io

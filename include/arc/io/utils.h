@@ -32,6 +32,13 @@
 namespace arc {
 namespace io {
 
+enum class IOType {
+  READ = 0U,
+  WRITE = 1U,
+  ACCEPT = 2U,
+  CONNECT = 3U,
+};
+
 enum class Pattern {
   SYNC = 0U,
   ASYNC = 1U,

@@ -1,7 +1,7 @@
 /*
- * File: coro_socket_example.cc
+ * File: bits.h
  * Project: libarc
- * File Created: Sunday, 13th December 2020 6:01:29 pm
+ * File Created: Monday, 14th December 2020 9:44:00 pm
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
@@ -26,35 +26,49 @@
  * IN THE SOFTWARE.
  */
 
-#include <arc/io/socket.h>
-#include <arc/coro/task.h>
+#ifndef LIBARC__UTILS__BITS_H
+#define LIBARC__UTILS__BITS_H
 
-using namespace arc::io;
-using namespace arc::net;
-using namespace arc::coro;
+#include <type_traits>
+#include <bitset>
 
-Task<void> HandleClient(Socket<Domain::IPV4, Protocol::TCP, Pattern::ASYNC> sock) {
-  std::cout << "start handling one client" << std::endl;
-  auto recv = co_await sock.Recv();
-  std::cout << recv << std::endl;
-  std::cout << co_await sock.Send(co_await sock.Recv()) << std::endl;
-}
+namespace arc {
+namespace utils {
 
-Task<void> Listen() {
-  Acceptor<Domain::IPV4, Pattern::ASYNC> accpetor;
-  accpetor.Bind({"localhost", 8082});
-  accpetor.Listen();
-  std::cout << "start accepting" << std::endl;
-  int i = 0;
-  while (i < 3) {
-    auto in_sock = co_await accpetor.Accept();
-    arc::coro::EnsureFuture(HandleClient(std::move(in_sock)));
-    i++;
+template<typename T>
+requires std::is_arithmetic_v<T>
+T BitSet(T in_coming, int bit_pos, bool val) {
+  assert(bit_pos <= sizeof(T) * 8u);
+  if (val) {
+    return (in_coming | (1UL << bit_pos));
   }
-  co_return;
+  return (in_coming & ~(1UL << bit_pos));
 }
 
-int main() {
-  StartEventLoop(Listen());
-  std::cout << "finished" << std::endl;
+template<typename T>
+requires std::is_arithmetic_v<T>
+bool GetBit(T in_coming, int bit_pos) {
+  assert(bit_pos <= sizeof(T) * 8u);
+  return (in_coming & ~(1UL << bit_pos)) > 0;
 }
+
+template<typename T>
+requires std::is_arithmetic_v<T>
+std::bitset<sizeof(T) * 8U> GetStdBitSet(T in_coming) {
+  return std::bitset<sizeof(T) * 8U>(in_coming);
+}
+
+template<typename T>
+requires std::is_arithmetic_v<T>
+T GetLowerBits(T in_coming, int lower_bits) {
+  assert(lower_bits <= sizeof(T) * 8u);
+  T all_ones = ~(0);
+  return (in_coming & (~(all_ones << lower_bits)));
+}
+
+
+} // namespace utils
+} // namespace arc
+
+
+#endif /* LIBARC__UTILS__BITS_H */

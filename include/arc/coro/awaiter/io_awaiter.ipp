@@ -31,55 +31,55 @@
 
 #include <arc/coro/eventloop.h>
 #include <arc/coro/events/io_event_base.h>
-#include <arc/io/socket.h>
+// #include <arc/io/socket.h>
 
 namespace arc {
 namespace coro {
 
-template <net::Domain AF, net::Protocol P, detail::IOType T>
+template <net::Domain AF, net::Protocol P, io::IOType T>
 class IOAwaiter {
  public:
-  IOAwaiter(io::Socket<AF, P, io::Pattern::ASYNC>* sock, void* storage)
+  using StorageType = typename std::conditional_t<T == io::IOType::READ, int, void*>;
+
+  IOAwaiter(io::Socket<AF, P, io::Pattern::ASYNC>* sock, StorageType storage)
       : sock_(sock), storage_(storage) {}
 
   bool await_ready() { return false; }
 
   template <typename PromiseType>
   void await_suspend(std::coroutine_handle<PromiseType> handle) {
-    events::detail::IOEventType type =
-        ((T == detail::IOType::ACCEPT || T == detail::IOType::READ)
-             ? events::detail::IOEventType::READ
-             : events::detail::IOEventType::WRITE);
     GetLocalEventLoop().AddIOEvent(
-        new events::detail::IOEventBase(sock_->GetFd(), type, handle));
+        new events::detail::IOEventBase(sock_->GetFd(), T, handle));
   }
 
-  template <detail::IOType UT = T>
-  requires(UT == detail::IOType::ACCEPT)
+  template <io::IOType UT = T>
+  requires(UT == io::IOType::ACCEPT)
       io::Socket<AF, P, io::Pattern::ASYNC> await_resume() {
-    return sock_->InternalAccept();
+    return dynamic_cast<io::Acceptor<AF, io::Pattern::ASYNC>*>(sock_)->GetNextAvailableSocket();
   }
 
-  template <detail::IOType UT = T>
-  requires(UT == detail::IOType::CONNECT)
+  template <io::IOType UT = T>
+  requires(UT == io::IOType::CONNECT)
   void await_resume() {
-    return sock_->InternalConnect(*(static_cast<net::Address<AF>*>(storage_)));
+    return
+    sock_->InternalConnect(*(static_cast<net::Address<AF>*>(storage_)));
   }
 
-  template <detail::IOType UT = T>
-  requires(UT == detail::IOType::READ)
+  template <io::IOType UT = T>
+  requires(UT == io::IOType::READ)
   std::string await_resume() {
-    return sock_->InternalRecv(*(static_cast<int*>(storage_)));
+    return sock_->InternalRecv(storage_);
   }
 
-  template <detail::IOType UT = T>
-  requires(UT == detail::IOType::WRITE)
+  template <io::IOType UT = T>
+  requires(UT == io::IOType::WRITE)
   int await_resume() {
     return sock_->InternalSend(*(static_cast<std::string*>(storage_)));
+    // return sock_->InternalSend("something");
   }
 
  private:
-  void* storage_{nullptr};
+  StorageType storage_{nullptr};
   io::Socket<AF, P, io::Pattern::ASYNC>* sock_{nullptr};
 };
 

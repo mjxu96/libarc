@@ -34,7 +34,7 @@
 namespace arc {
 namespace events {
 
-template<detail::IOEventType E>
+template<io::IOType E>
 class IOEvent : detail::IOEventBase {
 
 };

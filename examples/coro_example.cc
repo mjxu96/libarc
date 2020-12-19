@@ -58,25 +58,22 @@ Task<void> TestException() { throw std::logic_error("some error"); }
 
 Task<void> TestFuture(int i) {
   i = co_await InternalTask(i);
-  std::cout << i << std::endl;
   co_return;
 }
 
 Task<void> TestEmptyCoro() {
   for (int i = 0; i < 10; i++) {
-    EnsureFuture(TestFuture(i));
+    EnsureFuture(TestFuture(0));
   }
   int value = 0;
-  // for (int i = 0; i < 1; i++) {
   for (int i = 0; i < 1000; i++) {
     int ii = co_await InternalTask(0);
     value += ii;
-    // std::cout << ii << std::endl;
   }
   std::cout << value << std::endl;
   std::cout << co_await InternalTask(1000) << std::endl;
 
-  // std::cout << *(co_await TestMove(123)) << std::endl;
+  std::cout << *(co_await TestMove(123)) << std::endl;
 
   try {
     co_await InternalTask(-100);
@@ -90,7 +87,7 @@ Task<void> TestEmptyCoro() {
     std::cerr << e.what() << '\n';
   }
 
-  throw std::logic_error("som");
+  // throw std::logic_error("som");
 
   co_return;
 }
@@ -105,15 +102,12 @@ int test111() {
 
 int main() {
   std::cout << "arc version: " << arc::Version() << std::endl;
-  try
-  {
+  try {
     /* code */
-  StartEventLoop(TestEmptyCoro());
-  }
-  catch(const std::exception& e)
-  {
+    StartEventLoop(TestEmptyCoro());
+  } catch (const std::exception& e) {
     std::cerr << e.what() << '\n';
   }
-  
+
   // test111();
 }

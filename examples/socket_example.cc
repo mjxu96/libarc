@@ -45,21 +45,21 @@ void HandleClient(
   std::cout << client.Send(recv) << std::endl;
 }
 
-void MoveTest(Socket<Domain::IPV4, Protocol::TCP> sock) {
+void MoveTest(Acceptor<Domain::IPV4> acceptor) {
   int cnt = 0;
   while (cnt < 5) {
-    auto new_sock = sock.Accept();
+    auto new_sock = acceptor.Accept();
     HandleClient(std::move(new_sock));
     cnt++;
   }
 }
 
 void AcceptTest() {
-  Socket<Domain::IPV4, Protocol::TCP, Pattern::SYNC> sock;
-  sock.Bind({"localhost", 8082});
-  sock.Listen();
-  sock.SetNonBlocking(false);
-  MoveTest(std::move(sock));
+  Acceptor<Domain::IPV4, Pattern::SYNC> acceptor;
+  acceptor.Bind({"localhost", 8082});
+  acceptor.Listen();
+  acceptor.SetNonBlocking(false);
+  MoveTest(std::move(acceptor));
 }
 
 int main() { AcceptTest(); }

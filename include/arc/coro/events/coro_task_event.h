@@ -32,6 +32,7 @@
 #include <sys/eventfd.h>
 
 #include <coroutine>
+#include <cstdint>
 
 #include "event_base.h"
 
@@ -41,6 +42,7 @@ namespace events {
 class CoroTaskEvent : public detail::EventBase {
  public:
   CoroTaskEvent() : detail::EventBase(nullptr) {}
+  CoroTaskEvent(std::coroutine_handle<> handle) : detail::EventBase(handle) {}
   ~CoroTaskEvent() = default;
 
   inline void SetCoroId(std::uint64_t id) noexcept { id_ = id; }
