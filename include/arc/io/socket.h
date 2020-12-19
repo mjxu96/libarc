@@ -185,9 +185,15 @@ class SocketBase : public IOBase {
       int this_read_size = std::min(left_size, kRecvBufferSize_);
       ssize_t tmp_read =
           recvfrom(this->fd_, buffer_, this_read_size, 0, nullptr, nullptr);
-      buffer.append(buffer_, tmp_read);
+      if (tmp_read > 0) {
+        buffer.append(buffer_, tmp_read);
+      }
       if (tmp_read == -1) {
-        arc::utils::ThrowErrnoExceptions();
+        if (errno != EAGAIN || errno != EWOULDBLOCK) {
+          arc::utils::ThrowErrnoExceptions();
+        }
+        std::cout << "break" << std::endl;
+        break;
       } else if (tmp_read < kRecvBufferSize_) {
         // we read all contents;
         break;

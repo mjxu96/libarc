@@ -28,33 +28,68 @@
 
 #include <arc/io/socket.h>
 #include <arc/coro/task.h>
+#include <thread>
 
 using namespace arc::io;
 using namespace arc::net;
 using namespace arc::coro;
 
+const std::string ret = "HTTP/1.1 200 OK\r\nContent-Length: 140\r\nContent-Type: text/plain\r\n\r\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
 Task<void> HandleClient(Socket<Domain::IPV4, Protocol::TCP, Pattern::ASYNC> sock) {
-  std::cout << "start handling one client" << std::endl;
-  auto recv = co_await sock.Recv();
-  std::cout << recv << std::endl;
-  std::cout << co_await sock.Send(co_await sock.Recv()) << std::endl;
+  // std::cout << "start handling one client" << std::endl;
+  while (true) {
+    // try
+    // {
+    //   /* code */
+    // }
+    // catch(const std::exception& e)
+    // {
+    //   std::cerr << e.what() << '\n';
+    // }
+    
+    auto recv = co_await sock.Recv();
+    // std::cout << recv << std::endl;
+    if (recv.size() == 0) {
+      break;
+    }
+    // std::cout << co_await sock.Send(co_await sock.Recv()) << std::endl;
+    co_await sock.Send(ret);
+  }
 }
 
 Task<void> Listen() {
   Acceptor<Domain::IPV4, Pattern::ASYNC> accpetor;
-  accpetor.Bind({"localhost", 8082});
+  accpetor.SetOption(arc::net::SocketOption::REUSEADDR, 1);
+  accpetor.SetOption(arc::net::SocketOption::REUSEPORT, 1);
+  accpetor.Bind({"localhost", 8086});
   accpetor.Listen();
   std::cout << "start accepting" << std::endl;
   int i = 0;
-  while (i < 3) {
+  while (true) {
     auto in_sock = co_await accpetor.Accept();
     arc::coro::EnsureFuture(HandleClient(std::move(in_sock)));
     i++;
+    std::cout << "thread: 0x" << std::hex << std::this_thread::get_id() << std::dec << " handled " << i << " clients" << std::endl;
   }
   co_return;
 }
 
-int main() {
+void Start() {
   StartEventLoop(Listen());
+}
+
+int main(int argc, char** argv) {
+  std::vector<std::thread> threads;
+  int thread_num = std::stoi(std::string(argv[1]));
+  for (int i = 0; i < thread_num; i++) {
+    threads.emplace_back(Start);
+    // threads.back().detach();
+  }
+
+  for (int i = 0; i < thread_num; i++) {
+    threads[i].join();
+  }
+
   std::cout << "finished" << std::endl;
 }

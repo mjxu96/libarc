@@ -97,9 +97,7 @@ class TaskBase {
 
 struct PromiseBase {
  public:
-  PromiseBase() {
-    ret_pack_ = new CoroReturnPack{};
-  }
+  PromiseBase() { ret_pack_ = new CoroReturnPack{}; }
 
   void CleanUp() {
     if (this->ret_pack_->ret_exception_ptr) {
@@ -109,20 +107,18 @@ struct PromiseBase {
     if (ret_pack_) {
       delete ret_pack_;
       ret_pack_ = nullptr;
-    } 
+    }
   }
 
   void CreateAndAddCoroEvent(std::coroutine_handle<void> handle) {
     coro_event_ = new events::CoroTaskEvent{handle};
-    // coro_event_->SetCoroutineHandle(handle);
     is_this_promise_added_to_coro_tasks_ = true;
     GetLocalEventLoop().AddCoroutine(coro_event_);
   }
 
   void TriggerCoroEvent() noexcept {
     if (is_this_promise_added_to_coro_tasks_) {
-      GetLocalEventLoop().FinishCoroutine(
-          coro_event_->GetCoroId());
+      GetLocalEventLoop().FinishCoroutine(coro_event_->GetCoroId());
     }
   }
 
@@ -153,15 +149,11 @@ class [[nodiscard]] Task<void> : public detail::TaskBase {
  public:
   struct promise_type : public detail::PromiseBase {
     void return_void() {
-      // std::cout << "ret type: " << (int)(ret_pack_->return_type) << std::endl;
-      // std::cout << this << std::endl;
-      if (ret_pack_->return_type ==
-          detail::CoroReturnValueType::EXCEPTION) {
+      if (ret_pack_->return_type == detail::CoroReturnValueType::EXCEPTION) {
         return;
       }
       if (is_this_promise_added_to_coro_tasks_) {
-        ret_pack_->return_type =
-            detail::CoroReturnValueType::VALUE;
+        ret_pack_->return_type = detail::CoroReturnValueType::VALUE;
       } else {
         CleanUp();
       }
@@ -169,17 +161,16 @@ class [[nodiscard]] Task<void> : public detail::TaskBase {
     promise_type* get_return_object() noexcept { return this; }
   };
 
-  Task(promise_type* p) noexcept {
+  Task(promise_type * p) noexcept {
     promise_ = p;
     this->ret_pack_ = promise_->ret_pack_;
-    // std::cout << "init promise: " << promise_ << std::endl;
-    // std::cout << (int)(ret_pack_->return_type) << std::endl;
   }
 
   void Result() {
     switch (this->ret_pack_->return_type) {
       [[unlikely]] case detail::CoroReturnValueType::EXCEPTION : {
-        auto tmp_exception = CopyExceptionPtr(this->ret_pack_->ret_exception_ptr);
+        auto tmp_exception =
+            CopyExceptionPtr(this->ret_pack_->ret_exception_ptr);
         this->ret_pack_->ret_exception_ptr = nullptr;
         CleanUp();
         std::rethrow_exception(tmp_exception);
@@ -200,9 +191,7 @@ class [[nodiscard]] Task<void> : public detail::TaskBase {
         *(static_cast<promise_type*>(promise_)));
   }
 
-  void await_resume() {
-    Result();
-  }
+  void await_resume() { Result(); }
 
   void Start() {
     auto handle = std::coroutine_handle<promise_type>::from_promise(
@@ -210,9 +199,6 @@ class [[nodiscard]] Task<void> : public detail::TaskBase {
     assert(!handle.done());
     handle.resume();
   }
-
- private:
-  // bool* is_outer_done_{nullptr};
 };
 
 template <arc::concepts::CopyableMoveableOrVoid T>
@@ -242,8 +228,7 @@ class [[nodiscard]] Task : public detail::TaskBase {
           detail::CoroReturnValueType::EXCEPTION) {
         return;
       }
-      *(this->ret_) =
-          new std::remove_reference_t<U>(std::forward<U&&>(value));
+      *(this->ret_) = new std::remove_reference_t<U>(std::forward<U&&>(value));
       this->ret_pack_->return_type =
           arc::coro::detail::CoroReturnValueType::VALUE;
     }
@@ -251,11 +236,12 @@ class [[nodiscard]] Task : public detail::TaskBase {
     promise_type* get_return_object() noexcept { return this; }
 
     friend class Task<T>;
+
    private:
     T** ret_{nullptr};
   };
 
-  Task(promise_type* p) noexcept {
+  Task(promise_type * p) noexcept {
     promise_ = p;
     this->ret_pack_ = promise_->ret_pack_;
     ret_ = p->ret_;
@@ -273,16 +259,16 @@ class [[nodiscard]] Task : public detail::TaskBase {
     }
   }
 
-  ~Task() {
-    // CleanUp();
-  }
-
   T Result() {
     switch (this->ret_pack_->return_type) {
-      [[likely]] case detail::CoroReturnValueType::VALUE
-          : {T ret_value = std::move(*(*(ret_))); CleanUp(); return std::move(ret_value);}
+      [[likely]] case detail::CoroReturnValueType::VALUE : {
+        T ret_value = std::move(*(*(ret_)));
+        CleanUp();
+        return std::move(ret_value);
+      }
       [[unlikely]] case detail::CoroReturnValueType::EXCEPTION : {
-        auto tmp_exception = CopyExceptionPtr(this->ret_pack_->ret_exception_ptr);
+        auto tmp_exception =
+            CopyExceptionPtr(this->ret_pack_->ret_exception_ptr);
         this->ret_pack_->ret_exception_ptr = nullptr;
         CleanUp();
         std::rethrow_exception(tmp_exception);
@@ -302,9 +288,7 @@ class [[nodiscard]] Task : public detail::TaskBase {
         *(static_cast<promise_type*>(promise_)));
   }
 
-  T await_resume() {
-    return Result();
-  }
+  T await_resume() { return Result(); }
 
  private:
   T** ret_{nullptr};
