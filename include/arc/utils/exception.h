@@ -30,8 +30,8 @@
 #define LIBARC__UTILS__EXCEPTION_H
 
 #include <experimental/source_location>
-#include <system_error>
 #include <iostream>
+#include <system_error>
 
 namespace arc {
 namespace utils {
@@ -40,9 +40,9 @@ inline void ThrowErrnoExceptions(
     const std::experimental::source_location& source_location =
         std::experimental::source_location::current()) {
   const std::string file_name = std::string(source_location.file_name());
-  const std::string report = file_name.substr(file_name.find_last_of('/') + 1) + ":L" +
-                             std::to_string(source_location.line()) + ":" +
-                             std::string(source_location.function_name());
+  const std::string report = file_name.substr(file_name.find_last_of('/') + 1) +
+                             ":L" + std::to_string(source_location.line()) +
+                             ":" + std::string(source_location.function_name());
   throw std::system_error(errno, std::generic_category(), report);
 }
 

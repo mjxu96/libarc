@@ -70,7 +70,8 @@ void EventLoop::Do() {
       todo_events[todo_cnt] = GetEvent(fd, events::detail::IOEventType::WRITE);
       todo_cnt++;
     }
-    if (event_type && (event_type & EPOLLIN == 0) && (event_type & EPOLLOUT == 0)) {
+    if (event_type && (event_type & EPOLLIN == 0) &&
+        (event_type & EPOLLOUT == 0)) {
       arc::utils::ThrowErrnoExceptions();
     }
   }
@@ -94,16 +95,19 @@ void EventLoop::AddIOEvent(events::detail::IOEventBase* event) {
   auto target_fd = event->GetFd();
   events::detail::IOEventType event_type = event->GetIOEventType();
   total_added_task_num_++;
-  int should_add_event = (event_type == events::detail::IOEventType::READ ? EPOLLIN : EPOLLOUT);
+  int should_add_event =
+      (event_type == events::detail::IOEventType::READ ? EPOLLIN : EPOLLOUT);
   int prev_events = GetExistIOEvent(target_fd);
   if ((prev_events & should_add_event) == 0) {
     if (target_fd < kMaxFdInArray_) {
       assert(!io_events_[target_fd][static_cast<int>(event_type)]);
       io_events_[target_fd][static_cast<int>(event_type)] = event;
     } else {
-      assert(extra_io_events_.find(target_fd) == extra_io_events_.end() || !extra_io_events_[target_fd][static_cast<int>(event_type)]);
+      assert(extra_io_events_.find(target_fd) == extra_io_events_.end() ||
+             !extra_io_events_[target_fd][static_cast<int>(event_type)]);
       if (extra_io_events_.find(target_fd) == extra_io_events_.end()) {
-        extra_io_events_[target_fd] = std::vector<events::detail::IOEventBase*>{2, nullptr};
+        extra_io_events_[target_fd] =
+            std::vector<events::detail::IOEventBase*>{2, nullptr};
       }
       extra_io_events_[target_fd][static_cast<int>(event_type)] = event;
     }
@@ -120,17 +124,21 @@ void EventLoop::AddIOEvent(events::detail::IOEventBase* event) {
   } else {
     // already added
     if (target_fd < kMaxFdInArray_) {
-      assert(event->GetIOType() == io::IOType::ACCEPT || io_events_[target_fd][static_cast<int>(event_type)] != event);
+      assert(event->GetIOType() == io::IOType::ACCEPT ||
+             io_events_[target_fd][static_cast<int>(event_type)] != event);
       io_events_[target_fd][static_cast<int>(event_type)] = event;
     } else {
-      assert(event->GetIOType() == io::IOType::ACCEPT || extra_io_events_[target_fd][static_cast<int>(event_type)] != event);
+      assert(event->GetIOType() == io::IOType::ACCEPT ||
+             extra_io_events_[target_fd][static_cast<int>(event_type)] !=
+                 event);
       extra_io_events_[target_fd][static_cast<int>(event_type)] = event;
     }
     return;
   }
 }
 
-arc::events::detail::IOEventBase* EventLoop::GetEvent(int fd, events::detail::IOEventType event_type) {
+arc::events::detail::IOEventBase* EventLoop::GetEvent(
+    int fd, events::detail::IOEventType event_type) {
   if (fd < kMaxFdInArray_) {
     return io_events_[fd][static_cast<int>(event_type)];
   }
@@ -138,7 +146,10 @@ arc::events::detail::IOEventBase* EventLoop::GetEvent(int fd, events::detail::IO
 }
 
 void EventLoop::RemoveIOEvent(int fd, io::IOType io_type, bool forced) {
-  events::detail::IOEventType event_type = (io_type == io::IOType::READ || io_type == io::IOType::ACCEPT ? events::detail::IOEventType::READ : events::detail::IOEventType::WRITE);
+  events::detail::IOEventType event_type =
+      (io_type == io::IOType::READ || io_type == io::IOType::ACCEPT
+           ? events::detail::IOEventType::READ
+           : events::detail::IOEventType::WRITE);
   events::detail::IOEventBase* event = GetEvent(fd, event_type);
   RemoveIOEvent(event, forced);
 }
@@ -231,10 +242,14 @@ int EventLoop::GetExistIOEvent(int fd) {
       prev |= EPOLLOUT;
     }
   } else {
-    if (extra_io_events_.find(fd) != extra_io_events_.end() && extra_io_events_[fd][static_cast<int>(events::detail::IOEventType::READ)]) {
+    if (extra_io_events_.find(fd) != extra_io_events_.end() &&
+        extra_io_events_[fd]
+                        [static_cast<int>(events::detail::IOEventType::READ)]) {
       prev |= EPOLLIN;
     }
-    if (extra_io_events_.find(fd) != extra_io_events_.end() && extra_io_events_[fd][static_cast<int>(events::detail::IOEventType::WRITE)]) {
+    if (extra_io_events_.find(fd) != extra_io_events_.end() &&
+        extra_io_events_[fd][static_cast<int>(
+            events::detail::IOEventType::WRITE)]) {
       prev |= EPOLLOUT;
     }
   }

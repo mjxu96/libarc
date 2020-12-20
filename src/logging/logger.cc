@@ -28,7 +28,7 @@
 
 #include <arc/logging/logger.h>
 
-using namespace mo::logging;
+using namespace arc::logging;
 
 const std::unordered_map<uint8_t, std::string> Logger::level_map_ = {
     {(uint8_t)Level::DEBUG, "DEBUG"},     {(uint8_t)Level::INFO, "INFO"},

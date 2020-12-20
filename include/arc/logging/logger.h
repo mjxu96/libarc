@@ -26,8 +26,8 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef _MO_LOGGING_LOGGER_H_
-#define _MO_LOGGING_LOGGER_H_
+#ifndef LIBARC__LOGGING__LOGGER_H
+#define LIBARC__LOGGING__LOGGER_H
 
 #include <chrono>
 #include <cstdarg>
@@ -41,7 +41,7 @@
 #include <vector>
 // TODO add format
 
-namespace mo {
+namespace arc {
 namespace logging {
 
 struct LoggingFormatWrapper {
@@ -178,6 +178,6 @@ class Logger {
   }
 };
 }  // namespace logging
-}  // namespace mo
+}  // namespace arc
 
-#endif
+#endif /* LIBARC__LOGGING__LOGGER_H */

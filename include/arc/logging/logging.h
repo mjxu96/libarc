@@ -26,12 +26,12 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef _MO_LOGGING_LOGGING_H_
-#define _MO_LOGGING_LOGGING_H_
+#ifndef LIBARC__LOGGING__LOGGING_H
+#define LIBARC__LOGGING__LOGGING_H
 
 #include "logger.h"
 
-namespace mo {
+namespace arc {
 namespace logging {
 
 Logger& GetLogger(const std::string& name);
@@ -73,6 +73,6 @@ void SetSink(const std::ostream& out);
 void SetLevel(Level level);
 
 }  // namespace logging
-}  // namespace mo
+}  // namespace arc
 
-#endif
+#endif /* LIBARC__LOGGING__LOGGING_H */

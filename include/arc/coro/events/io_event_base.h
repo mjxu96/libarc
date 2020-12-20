@@ -64,9 +64,7 @@ class IOEventBase : public EventBase {
   inline detail::IOEventType GetIOEventType() const noexcept {
     return io_event_type_;
   }
-  inline io::IOType GetIOType() const noexcept {
-    return io_type_;
-  }
+  inline io::IOType GetIOType() const noexcept { return io_type_; }
   inline bool ShouldRemoveEveryTime() const noexcept {
     return should_remove_everytime_;
   }

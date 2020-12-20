@@ -43,8 +43,8 @@ class IOAwaiter {
       T == io::IOType::READ, int,
       typename std::conditional_t<
           T == io::IOType::WRITE, const std::string*,
-          typename std::conditional_t<
-              T == io::IOType::CONNECT, const net::Address<AF>*, void*>>>;
+          typename std::conditional_t<T == io::IOType::CONNECT,
+                                      const net::Address<AF>*, void*>>>;
 
   IOAwaiter(io::Socket<AF, P, io::Pattern::ASYNC>* sock, StorageType storage)
       : sock_(sock), storage_(storage) {}
@@ -110,10 +110,10 @@ class IOAwaiter {
 
   template <io::IOType UT = T>
   requires(UT == io::IOType::WRITE) int await_resume() {
-    if (written_size_ >= 0) [[likely]] {
-      return written_size_;
-    }
-    return sock_->InternalSend(*storage_);
+    if (written_size_ >= 0)
+      [[likely]] {
+        return written_size_;
+      } return sock_->InternalSend(*storage_);
   }
 
  private:

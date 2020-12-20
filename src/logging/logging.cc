@@ -28,25 +28,25 @@
 
 #include <arc/logging/logging.h>
 
-std::unordered_map<std::string, mo::logging::Logger> loggers = {
-    {"", mo::logging::Logger("")}};
-mo::logging::Logger* mo::logging::default_logger = &loggers[""];
+std::unordered_map<std::string, arc::logging::Logger> loggers = {
+    {"", arc::logging::Logger("")}};
+arc::logging::Logger* arc::logging::default_logger = &loggers[""];
 
-mo::logging::Logger& mo::logging::GetLogger(const std::string& name) {
+arc::logging::Logger& arc::logging::GetLogger(const std::string& name) {
   if (loggers.find(name) == loggers.end()) {
-    loggers.insert({name, mo::logging::Logger(name)});
+    loggers.insert({name, arc::logging::Logger(name)});
   }
   return loggers[name];
 }
 
-void mo::logging::SetFormat(const std::string& format) {
+void arc::logging::SetFormat(const std::string& format) {
   default_logger->SetFormat(format);
 }
 
-void mo::logging::SetSink(const std::ostream& out) {
+void arc::logging::SetSink(const std::ostream& out) {
   default_logger->SetSink(out);
 }
 
-void mo::logging::SetLevel(mo::logging::Level level) {
+void arc::logging::SetLevel(arc::logging::Level level) {
   default_logger->SetLevel(level);
 }

@@ -38,8 +38,7 @@ void ConnectTest() {
   std::cout << sock.Recv(3) << std::endl;
 }
 
-void HandleClient(
-    Socket<Domain::IPV4, Protocol::TCP, Pattern::SYNC> client) {
+void HandleClient(Socket<Domain::IPV4, Protocol::TCP, Pattern::SYNC> client) {
   auto recv = client.Recv();
   std::cout << recv << std::endl;
   std::cout << client.Send(recv) << std::endl;

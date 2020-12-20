@@ -71,8 +71,7 @@ class EventLoop : public io::detail::IOBase {
 
   // fd -> {io_type : events}
   std::vector<std::vector<events::detail::IOEventBase*>> io_events_{
-      kMaxFdInArray_, std::vector<events::detail::IOEventBase*>{
-                          2, nullptr}};
+      kMaxFdInArray_, std::vector<events::detail::IOEventBase*>{2, nullptr}};
 
   std::unordered_map<int, std::vector<events::detail::IOEventBase*>>
       extra_io_events_{};
@@ -84,10 +83,12 @@ class EventLoop : public io::detail::IOBase {
 
   // epoll related
   epoll_event events[kMaxEventsSizePerWait_];
-  events::detail::IOEventBase* todo_events[2 * kMaxEventsSizePerWait_] = {nullptr};
+  events::detail::IOEventBase* todo_events[2 * kMaxEventsSizePerWait_] = {
+      nullptr};
 
   int GetExistIOEvent(int fd);
-  events::detail::IOEventBase* GetEvent(int fd, events::detail::IOEventType event_type);
+  events::detail::IOEventBase* GetEvent(int fd,
+                                        events::detail::IOEventType event_type);
   // int IsFdExistInOtherTypeTodoEvents(int fd, io::IOType exclude_event);
   // int GetEpollFlagFromIOType(io::IOType type);
   // std::pair<int, io::IOType> GetFdAndIOTypeFromEpollEvent(uint64_t u);

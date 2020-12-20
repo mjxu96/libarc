@@ -29,9 +29,9 @@
 #ifndef LIBARC__IO__SOCKET_H
 #define LIBARC__IO__SOCKET_H
 
-#include <arc/io/utils.h>
 #include <arc/coro/eventloop.h>
 #include <arc/coro/events/io_event_base.h>
+#include <arc/io/utils.h>
 #include <arc/net/address.h>
 #include <arc/utils/exception.h>
 #include <fcntl.h>
@@ -154,10 +154,11 @@ class SocketBase : public IOBase {
   }
 
   template <net::Domain UAF>
-  int InternalTrySendTo(const std::string& data, const net::Address<UAF>* addr) {
+  int InternalTrySendTo(const std::string& data,
+                        const net::Address<UAF>* addr) {
     return sendto(this->fd_, data.c_str(), data.size(), 0,
-                      (addr ? addr->GetCStyleAddress() : nullptr),
-                      (addr ? addr->AddressSize() : 0));
+                  (addr ? addr->GetCStyleAddress() : nullptr),
+                  (addr ? addr->AddressSize() : 0));
   }
 
   template <net::Domain UAF>
@@ -290,9 +291,8 @@ class Socket : public detail::SocketBase<AF,
   template <net::Protocol UP = P, Pattern UPP = PP>
       requires(UP == net::Protocol::TCP) &&
       (UPP == Pattern::ASYNC)
-          coro::IOAwaiter<AF, net::Protocol::TCP,
-                          io::IOType::READ> Recv(int max_recv_bytes =
-                                                               -1) {
+          coro::IOAwaiter<AF, net::Protocol::TCP, io::IOType::READ> Recv(
+              int max_recv_bytes = -1) {
     return {this, max_recv_bytes};
   }
 
@@ -304,13 +304,11 @@ class Socket : public detail::SocketBase<AF,
 
   template <net::Protocol UP = P, Pattern UPP = PP>
       requires(UP == net::Protocol::TCP) &&
-      (UPP == Pattern::ASYNC) coro::IOAwaiter<
-          AF, net::Protocol::TCP,
-          io::IOType::CONNECT> Connect(const net::Address<AF>& addr) {
+      (UPP == Pattern::ASYNC)
+          coro::IOAwaiter<AF, net::Protocol::TCP, io::IOType::CONNECT> Connect(
+              const net::Address<AF>& addr) {
     return {this, &addr};
   }
-
-
 
   // UDP
 
@@ -344,7 +342,8 @@ class Socket : public detail::SocketBase<AF,
   }
 
   template <net::Protocol UP = P>
-  requires(UP == net::Protocol::TCP) int InternalTrySend(const std::string& data) {
+  requires(UP ==
+           net::Protocol::TCP) int InternalTrySend(const std::string& data) {
     return this->template InternalTrySendTo<AF>(data, nullptr);
   }
 
@@ -365,16 +364,17 @@ class Socket : public detail::SocketBase<AF,
   template <net::Protocol UP = P>
   requires(UP == net::Protocol::TCP) bool InternalTryConnect(
       const net::Address<AF>& addr) {
-    return (connect(this->fd_, addr.GetCStyleAddress(), addr.AddressSize()) == 0);
+    return (connect(this->fd_, addr.GetCStyleAddress(), addr.AddressSize()) ==
+            0);
   }
 };
 
-template <net::Domain AF = net::Domain::IPV4,
-          Pattern PP = Pattern::SYNC>
+template <net::Domain AF = net::Domain::IPV4, Pattern PP = Pattern::SYNC>
 class Acceptor : public Socket<AF, net::Protocol::TCP, PP> {
  public:
   Acceptor() : Socket<AF, net::Protocol::TCP, PP>() {}
-  Acceptor(Acceptor&& other) : Socket<AF, net::Protocol::TCP, PP>(std::move(other)) {}
+  Acceptor(Acceptor&& other)
+      : Socket<AF, net::Protocol::TCP, PP>(std::move(other)) {}
   Acceptor& operator=(Acceptor&& other) {
     Socket<AF, net::Protocol::TCP, PP>::operator=(std::move(other));
     return *this;
@@ -382,7 +382,8 @@ class Acceptor : public Socket<AF, net::Protocol::TCP, PP> {
   ~Acceptor() {
     if constexpr (PP == Pattern::ASYNC) {
       if (is_listened_) {
-        arc::coro::GetLocalEventLoop().RemoveIOEvent(this->fd_, io::IOType::ACCEPT, true);
+        arc::coro::GetLocalEventLoop().RemoveIOEvent(this->fd_,
+                                                     io::IOType::ACCEPT, true);
       }
     }
   }
@@ -395,31 +396,32 @@ class Acceptor : public Socket<AF, net::Protocol::TCP, PP> {
   }
 
   template <Pattern UPP = PP>
-      requires(UPP == Pattern::SYNC) Socket<AF, net::Protocol::TCP, PP>
-      Accept() {
+  requires(UPP == Pattern::SYNC) Socket<AF, net::Protocol::TCP, PP> Accept() {
     return InternalAccept();
   }
 
   template <Pattern UPP = PP>
-      requires(UPP ==
-       Pattern::ASYNC) coro::IOAwaiter<AF, net::Protocol::TCP,
-                                       io::IOType::ACCEPT> Accept() {
+  requires(UPP == Pattern::ASYNC)
+      coro::IOAwaiter<AF, net::Protocol::TCP, io::IOType::ACCEPT> Accept() {
     return {this, nullptr};
   }
 
   friend class arc::coro::IOAwaiter<AF, net::Protocol::TCP, io::IOType::ACCEPT>;
+
  private:
   std::queue<Socket<AF, net::Protocol::TCP, PP>> cached_incoming_sockets_{};
 
-  template<io::Pattern UPP = PP> requires(UPP == io::Pattern::ASYNC) 
-  bool HasCachedAvailableSocket() {
+  template <io::Pattern UPP = PP>
+  requires(UPP == io::Pattern::ASYNC) bool HasCachedAvailableSocket() {
     return !cached_incoming_sockets_.empty();
   }
 
-  template<io::Pattern UPP = PP> requires(UPP == io::Pattern::ASYNC) 
-  Socket<AF, net::Protocol::TCP, UPP> GetNextAvailableSocket() {
+  template <io::Pattern UPP = PP>
+  requires(UPP == io::Pattern::ASYNC)
+      Socket<AF, net::Protocol::TCP, UPP> GetNextAvailableSocket() {
     if (!cached_incoming_sockets_.empty()) {
-      Socket<AF, net::Protocol::TCP, PP> next_socket = std::move(cached_incoming_sockets_.front());
+      Socket<AF, net::Protocol::TCP, PP> next_socket =
+          std::move(cached_incoming_sockets_.front());
       cached_incoming_sockets_.pop();
       return std::move(next_socket);
     }
@@ -438,7 +440,8 @@ class Acceptor : public Socket<AF, net::Protocol::TCP, PP> {
       }
       cached_incoming_sockets_.emplace(accept_fd, in_addr);
     }
-    Socket<AF, net::Protocol::TCP, PP> next_socket = std::move(cached_incoming_sockets_.front());
+    Socket<AF, net::Protocol::TCP, PP> next_socket =
+        std::move(cached_incoming_sockets_.front());
     cached_incoming_sockets_.pop();
     return std::move(next_socket);
   }
@@ -454,6 +457,7 @@ class Acceptor : public Socket<AF, net::Protocol::TCP, PP> {
     }
     return Socket<AF, net::Protocol::TCP, PP>(accept_fd, in_addr);
   }
+
  private:
   bool is_listened_{false};
 };

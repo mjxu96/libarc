@@ -44,7 +44,7 @@ namespace arc {
 namespace coro {
 
 template <arc::concepts::CopyableMoveableOrVoid T>
-class [[nodiscard]] Task;
+class[[nodiscard]] Task;
 
 namespace detail {
 
@@ -145,7 +145,7 @@ struct PromiseBase {
 }  // namespace detail
 
 template <>
-class [[nodiscard]] Task<void> : public detail::TaskBase {
+class[[nodiscard]] Task<void> : public detail::TaskBase {
  public:
   struct promise_type : public detail::PromiseBase {
     void return_void() {
@@ -191,7 +191,10 @@ class [[nodiscard]] Task<void> : public detail::TaskBase {
         *(static_cast<promise_type*>(promise_)));
   }
 
-  void await_resume() { Result(); }
+  void
+  await_resume() {
+    Result();
+  }
 
   void Start() {
     auto handle = std::coroutine_handle<promise_type>::from_promise(
@@ -202,7 +205,7 @@ class [[nodiscard]] Task<void> : public detail::TaskBase {
 };
 
 template <arc::concepts::CopyableMoveableOrVoid T>
-class [[nodiscard]] Task : public detail::TaskBase {
+class[[nodiscard]] Task : public detail::TaskBase {
  public:
   struct promise_type : public detail::PromiseBase {
     promise_type() : detail::PromiseBase() {
@@ -288,7 +291,9 @@ class [[nodiscard]] Task : public detail::TaskBase {
         *(static_cast<promise_type*>(promise_)));
   }
 
-  T await_resume() { return Result(); }
+  T await_resume() {
+    return Result();
+  }
 
  private:
   T** ret_{nullptr};
