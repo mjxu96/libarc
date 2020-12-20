@@ -29,13 +29,21 @@
 #ifndef LIBARC__UTILS__EXCEPTION_H
 #define LIBARC__UTILS__EXCEPTION_H
 
+#ifdef __clang__
+#else
 #include <experimental/source_location>
+#endif
 #include <iostream>
 #include <system_error>
 
 namespace arc {
 namespace utils {
 
+#ifdef __clang__
+inline void ThrowErrnoExceptions() {
+  throw std::system_error(errno, std::generic_category());
+}
+#else
 inline void ThrowErrnoExceptions(
     const std::experimental::source_location& source_location =
         std::experimental::source_location::current()) {
@@ -45,6 +53,8 @@ inline void ThrowErrnoExceptions(
                              ":" + std::string(source_location.function_name());
   throw std::system_error(errno, std::generic_category(), report);
 }
+#endif
+
 
 }  // namespace utils
 }  // namespace arc

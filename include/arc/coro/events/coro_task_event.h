@@ -31,7 +31,14 @@
 
 #include <sys/eventfd.h>
 
+#ifdef __clang__
+#include <experimental/coroutine>
+namespace std {
+  using experimental::coroutine_handle;
+}
+#else
 #include <coroutine>
+#endif
 #include <cstdint>
 
 #include "event_base.h"

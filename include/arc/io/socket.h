@@ -239,7 +239,7 @@ class Socket : public detail::SocketBase<AF,
                                 : net::SocketType::DATAGRAM),
                            P>() {
     if constexpr (PP == Pattern::ASYNC) {
-      this->template SetNonBlocking(true);
+      this->SetNonBlocking(true);
     }
   }
   Socket(int fd, const net::Address<AF>& in_addr)
@@ -249,7 +249,7 @@ class Socket : public detail::SocketBase<AF,
                                 : net::SocketType::DATAGRAM),
                            P>(fd, in_addr) {
     if constexpr (PP == Pattern::ASYNC) {
-      this->template SetNonBlocking(true);
+      this->SetNonBlocking(true);
     }
   }
   Socket(const Socket&) = delete;

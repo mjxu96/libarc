@@ -35,7 +35,16 @@
 #include <arc/coro/events/coro_task_event.h>
 #include <unistd.h>
 
+#ifdef __clang__
+#include <experimental/coroutine>
+namespace std {
+  using experimental::coroutine_handle;
+  using experimental::suspend_always;
+  using experimental::suspend_never;
+}
+#else
 #include <coroutine>
+#endif
 #include <exception>
 #include <iostream>
 #include <string>
@@ -213,7 +222,8 @@ class[[nodiscard]] Task : public detail::TaskBase {
       (*ret_) = nullptr;
     }
 
-    template <std::move_constructible U = T>
+    template <arc::concepts::CopyableMoveableOrVoid U = T>
+    requires (std::is_move_constructible_v<U>)
     void return_value(U&& value) {
       if (this->ret_pack_->return_type ==
           detail::CoroReturnValueType::EXCEPTION) {
@@ -225,7 +235,8 @@ class[[nodiscard]] Task : public detail::TaskBase {
           arc::coro::detail::CoroReturnValueType::VALUE;
     }
 
-    template <std::copy_constructible U = T>
+    template <arc::concepts::CopyableMoveableOrVoid U = T>
+    requires (!std::is_move_constructible_v<U>)
     void return_value(U&& value) {
       if (this->ret_pack_->return_type ==
           detail::CoroReturnValueType::EXCEPTION) {

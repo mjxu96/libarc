@@ -37,7 +37,14 @@
 #include <assert.h>
 #include <sys/epoll.h>
 
+#ifdef __clang__
+#include <experimental/coroutine>
+namespace std {
+  using experimental::coroutine_handle;
+}
+#else
 #include <coroutine>
+#endif
 #include <iostream>
 #include <list>
 #include <queue>

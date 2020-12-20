@@ -70,8 +70,8 @@ void EventLoop::Do() {
       todo_events[todo_cnt] = GetEvent(fd, events::detail::IOEventType::WRITE);
       todo_cnt++;
     }
-    if (event_type && (event_type & EPOLLIN == 0) &&
-        (event_type & EPOLLOUT == 0)) {
+    if (event_type && ((event_type & EPOLLIN) == 0) &&
+        ((event_type & EPOLLOUT) == 0)) {
       arc::utils::ThrowErrnoExceptions();
     }
   }

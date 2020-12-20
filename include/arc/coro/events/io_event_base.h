@@ -35,7 +35,14 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#ifdef __clang__
+#include <experimental/coroutine>
+namespace std {
+  using experimental::coroutine_handle;
+}
+#else
 #include <coroutine>
+#endif
 #include <iostream>
 
 namespace arc {

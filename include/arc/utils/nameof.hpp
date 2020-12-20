@@ -533,7 +533,7 @@ constexpr auto values(std::index_sequence<I...>) noexcept {
 template <typename E, bool IsFlags, typename U = std::underlying_type_t<E>>
 constexpr auto values() noexcept {
   static_assert(is_enum_v<E>, "nameof::detail::values requires enum type.");
-  constexpr auto range_size = reflected_max_v<E, IsFlags> - reflected_min_v<E, IsFlags> + 1;
+  constexpr auto range_size = reflected_max_v<E, IsFlags> - reflected_min_v<E, IsFlags>;
   static_assert(range_size > 0, "nameof::enum_range requires valid size.");
   static_assert(range_size < (std::numeric_limits<std::uint16_t>::max)(), "nameof::enum_range requires valid size.");
 

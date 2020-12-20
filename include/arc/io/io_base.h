@@ -54,7 +54,7 @@ class IOBase {
  protected:
   int fd_{-1};
 
- private:
+ protected:
   void MoveFrom(IOBase&& other);
 };
 
