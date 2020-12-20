@@ -39,12 +39,51 @@ namespace coro {
 template <net::Domain AF, net::Protocol P, io::IOType T>
 class IOAwaiter {
  public:
-  using StorageType = typename std::conditional_t<T == io::IOType::READ, int, void*>;
+  using StorageType = typename std::conditional_t<
+      T == io::IOType::READ, int,
+      typename std::conditional_t<
+          T == io::IOType::WRITE, const std::string*,
+          typename std::conditional_t<
+              T == io::IOType::CONNECT, const net::Address<AF>*, void*>>>;
 
   IOAwaiter(io::Socket<AF, P, io::Pattern::ASYNC>* sock, StorageType storage)
       : sock_(sock), storage_(storage) {}
 
-  bool await_ready() { return false; }
+  template <io::IOType UT = T>
+  requires(UT == io::IOType::ACCEPT) bool await_ready() {
+    return dynamic_cast<io::Acceptor<AF, io::Pattern::ASYNC>*>(sock_)
+        ->HasCachedAvailableSocket();
+  }
+
+  template <io::IOType UT = T>
+  requires(UT == io::IOType::CONNECT) bool await_ready() {
+    if (sock_->InternalTryConnect(*storage_)) {
+      return true;
+    } else {
+      if (errno == EINPROGRESS) {
+        return false;
+      }
+    }
+    arc::utils::ThrowErrnoExceptions();
+    return true;
+  }
+
+  template <io::IOType UT = T>
+  requires(UT == io::IOType::WRITE) bool await_ready() {
+    written_size_ = sock_->InternalTrySend(*storage_);
+    if (written_size_ < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        return false;
+      }
+      arc::utils::ThrowErrnoExceptions();
+    }
+    return true;
+  }
+
+  template <io::IOType UT = T>
+  requires(UT == io::IOType::READ) bool await_ready() {
+    return false;
+  }
 
   template <typename PromiseType>
   void await_suspend(std::coroutine_handle<PromiseType> handle) {
@@ -55,32 +94,32 @@ class IOAwaiter {
   template <io::IOType UT = T>
   requires(UT == io::IOType::ACCEPT)
       io::Socket<AF, P, io::Pattern::ASYNC> await_resume() {
-    return dynamic_cast<io::Acceptor<AF, io::Pattern::ASYNC>*>(sock_)->GetNextAvailableSocket();
+    return dynamic_cast<io::Acceptor<AF, io::Pattern::ASYNC>*>(sock_)
+        ->GetNextAvailableSocket();
   }
 
   template <io::IOType UT = T>
-  requires(UT == io::IOType::CONNECT)
-  void await_resume() {
-    return
-    sock_->InternalConnect(*(static_cast<net::Address<AF>*>(storage_)));
+  requires(UT == io::IOType::CONNECT) void await_resume() {
+    return;
   }
 
   template <io::IOType UT = T>
-  requires(UT == io::IOType::READ)
-  std::string await_resume() {
+  requires(UT == io::IOType::READ) std::string await_resume() {
     return sock_->InternalRecv(storage_);
   }
 
   template <io::IOType UT = T>
-  requires(UT == io::IOType::WRITE)
-  int await_resume() {
-    return sock_->InternalSend(*(static_cast<std::string*>(storage_)));
-    // return sock_->InternalSend("something");
+  requires(UT == io::IOType::WRITE) int await_resume() {
+    if (written_size_ >= 0) [[likely]] {
+      return written_size_;
+    }
+    return sock_->InternalSend(*storage_);
   }
 
  private:
   StorageType storage_{nullptr};
   io::Socket<AF, P, io::Pattern::ASYNC>* sock_{nullptr};
+  int written_size_{0};
 };
 
 }  // namespace coro

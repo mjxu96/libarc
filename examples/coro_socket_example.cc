@@ -37,25 +37,22 @@ using namespace arc::coro;
 const std::string ret = "HTTP/1.1 200 OK\r\nContent-Length: 140\r\nContent-Type: text/plain\r\n\r\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 Task<void> HandleClient(Socket<Domain::IPV4, Protocol::TCP, Pattern::ASYNC> sock) {
-  // std::cout << "start handling one client" << std::endl;
+    try
+    {
   while (true) {
-    // try
-    // {
-    //   /* code */
-    // }
-    // catch(const std::exception& e)
-    // {
-    //   std::cerr << e.what() << '\n';
-    // }
-    
     auto recv = co_await sock.Recv();
-    // std::cout << recv << std::endl;
     if (recv.size() == 0) {
       break;
     }
-    // std::cout << co_await sock.Send(co_await sock.Recv()) << std::endl;
     co_await sock.Send(ret);
+    
+
   }
+    }
+    catch(const std::exception& e)
+    {
+      std::cerr << e.what() << '\n';
+    }
 }
 
 Task<void> Listen() {
@@ -75,16 +72,27 @@ Task<void> Listen() {
   co_return;
 }
 
+Task<void> Connect() {
+  const std::string request = "GET / HTTP/1.1\r\nHost: www.baidu.com\r\nUser-Agent: curl/7.58.0\r\nAccept: */*\r\n\r\n";
+  Socket<arc::net::Domain::IPV4, arc::net::Protocol::TCP, arc::io::Pattern::ASYNC> client;
+  co_await client.Connect({"www.google.com", 80});
+  std::cout << "before send" << std::endl;
+  co_await client.Send(request);
+  std::cout << "after send" << std::endl;
+  std::cout << co_await client.Recv() << std::endl;
+  co_return;
+}
+
 void Start() {
   StartEventLoop(Listen());
 }
 
 int main(int argc, char** argv) {
+  StartEventLoop(Connect());
   std::vector<std::thread> threads;
   int thread_num = std::stoi(std::string(argv[1]));
   for (int i = 0; i < thread_num; i++) {
     threads.emplace_back(Start);
-    // threads.back().detach();
   }
 
   for (int i = 0; i < thread_num; i++) {

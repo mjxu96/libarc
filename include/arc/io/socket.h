@@ -154,6 +154,13 @@ class SocketBase : public IOBase {
   }
 
   template <net::Domain UAF>
+  int InternalTrySendTo(const std::string& data, const net::Address<UAF>* addr) {
+    return sendto(this->fd_, data.c_str(), data.size(), 0,
+                      (addr ? addr->GetCStyleAddress() : nullptr),
+                      (addr ? addr->AddressSize() : 0));
+  }
+
+  template <net::Domain UAF>
   std::string InternalRecvFrom(int max_recv_bytes, net::Address<UAF>* addr) {
     if (addr) {
       // Call UDP::RecvFrom
@@ -271,7 +278,7 @@ class Socket : public detail::SocketBase<AF,
   requires(UP == Pattern::ASYNC)
       coro::IOAwaiter<AF, net::Protocol::TCP, io::IOType::WRITE> Send(
           const std::string& data) {
-    return {this, (void*)&data};
+    return {this, &data};
   }
 
   template <net::Protocol UP = P, Pattern UPP = PP>
@@ -300,7 +307,7 @@ class Socket : public detail::SocketBase<AF,
       (UPP == Pattern::ASYNC) coro::IOAwaiter<
           AF, net::Protocol::TCP,
           io::IOType::CONNECT> Connect(const net::Address<AF>& addr) {
-    return {this, (void*)&addr};
+    return {this, &addr};
   }
 
 
@@ -337,6 +344,11 @@ class Socket : public detail::SocketBase<AF,
   }
 
   template <net::Protocol UP = P>
+  requires(UP == net::Protocol::TCP) int InternalTrySend(const std::string& data) {
+    return this->template InternalTrySendTo<AF>(data, nullptr);
+  }
+
+  template <net::Protocol UP = P>
   requires(UP == net::Protocol::TCP) std::string
       InternalRecv(int max_recv_bytes = -1) {
     return this->template InternalRecvFrom<AF>(max_recv_bytes, nullptr);
@@ -349,6 +361,11 @@ class Socket : public detail::SocketBase<AF,
     if (res < 0) {
       arc::utils::ThrowErrnoExceptions();
     }
+  }
+  template <net::Protocol UP = P>
+  requires(UP == net::Protocol::TCP) bool InternalTryConnect(
+      const net::Address<AF>& addr) {
+    return (connect(this->fd_, addr.GetCStyleAddress(), addr.AddressSize()) == 0);
   }
 };
 
@@ -393,6 +410,11 @@ class Acceptor : public Socket<AF, net::Protocol::TCP, PP> {
   friend class arc::coro::IOAwaiter<AF, net::Protocol::TCP, io::IOType::ACCEPT>;
  private:
   std::queue<Socket<AF, net::Protocol::TCP, PP>> cached_incoming_sockets_{};
+
+  template<io::Pattern UPP = PP> requires(UPP == io::Pattern::ASYNC) 
+  bool HasCachedAvailableSocket() {
+    return !cached_incoming_sockets_.empty();
+  }
 
   template<io::Pattern UPP = PP> requires(UPP == io::Pattern::ASYNC) 
   Socket<AF, net::Protocol::TCP, UPP> GetNextAvailableSocket() {
