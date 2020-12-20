@@ -1,6 +1,8 @@
 
 include_directories("${LIBARC_ROOT_DIR}/include")
 
+find_package (Threads)
+
 add_library(arccoro
   ${LIBARC_ROOT_DIR}/src/coro/eventloop.cc
 )
@@ -21,6 +23,7 @@ add_library(arc
 target_link_libraries(arc
   arccoro
   arcio
+  ${CMAKE_THREAD_LIBS_INIT}
 )
 
 target_include_directories(arc PUBLIC "${LIBARC_ROOT_DIR}/include")
