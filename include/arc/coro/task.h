@@ -310,19 +310,11 @@ class[[nodiscard]] Task : public detail::TaskBase {
   T** ret_{nullptr};
 };
 
-void EnsureFuture(Task<void> task) { task.Start(); }
+void EnsureFuture(Task<void> task);
 
-void RunUntilComplelete() {
-  auto& event_loop = GetLocalEventLoop();
-  while (!event_loop.IsDone()) {
-    event_loop.Do();
-  }
-}
+void RunUntilComplelete();
 
-void StartEventLoop(Task<void> task) {
-  task.Start();
-  RunUntilComplelete();
-}
+void StartEventLoop(Task<void> task);
 
 }  // namespace coro
 }  // namespace arc

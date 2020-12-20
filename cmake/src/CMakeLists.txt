@@ -5,6 +5,7 @@ find_package (Threads)
 
 add_library(arccoro
   ${LIBARC_ROOT_DIR}/src/coro/eventloop.cc
+  ${LIBARC_ROOT_DIR}/src/coro/task.cc
 )
 
 add_library(arcio
@@ -23,6 +24,7 @@ add_library(arc
 target_link_libraries(arc
   arccoro
   arcio
+  arclogging
   ${CMAKE_THREAD_LIBS_INIT}
 )
 

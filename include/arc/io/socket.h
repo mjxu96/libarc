@@ -131,6 +131,10 @@ class SocketBase : public IOBase {
     is_non_blocking_ = is_enabled;
   }
 
+  net::Address<AF> GetAddr() const {
+    return addr_;
+  }
+
  protected:
   using CAddressType =
       typename std::conditional_t<(AF == arc::net::Domain::IPV4), sockaddr_in,
