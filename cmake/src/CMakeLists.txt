@@ -9,8 +9,10 @@ add_library(arcio
   ${LIBARC_ROOT_DIR}/src/io/io_base.cc
 )
 
-# add_library(arcutils
-# )
+add_library(arclogging
+  ${LIBARC_ROOT_DIR}/src/logging/logger.cc
+  ${LIBARC_ROOT_DIR}/src/logging/logging.cc
+)
 
 add_library(arc
   ${LIBARC_ROOT_DIR}/src/arc.cc

@@ -34,7 +34,10 @@
 #include <cstdio>
 #include <ctime>
 #include <exception>
+#ifdef __clang__
+#else
 #include <experimental/source_location>
+#endif
 #include <filesystem>
 #include <iostream>
 #include <unordered_map>
@@ -45,6 +48,18 @@ namespace arc {
 namespace logging {
 
 struct LoggingFormatWrapper {
+
+#ifdef __clang__
+  constexpr LoggingFormatWrapper(
+      const char* format,
+      const char* file_name = "",
+      const char* func_name = "",
+      unsigned line = 0)
+      : format_{format},
+        file_name_{file_name},
+        func_name_(func_name),
+        line_{line} {}
+#else
   constexpr LoggingFormatWrapper(
       const char* format,
       const char* file_name =
@@ -60,6 +75,7 @@ struct LoggingFormatWrapper {
         file_name_{file_name},
         func_name_(func_name),
         line_{line} {}
+#endif
 
   const char* format_;
   const char* file_name_;
