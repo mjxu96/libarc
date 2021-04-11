@@ -49,7 +49,7 @@ Task<void> HandleClient(
       if (recv.size() == 0) {
         break;
       }
-      co_await sock.Send(ret);
+      co_await sock.Send(ret + recv);
     }
   } catch (const std::exception& e) {
     std::cerr << e.what() << '\n';
@@ -64,7 +64,7 @@ Task<void> Listen() {
   accpetor.Listen();
   std::cout << "start accepting" << std::endl;
   int i = 0;
-  while (true) {
+  while (i < 2) {
     auto in_sock = co_await accpetor.Accept();
     arc::coro::EnsureFuture(HandleClient(std::move(in_sock)));
     i++;
@@ -81,7 +81,8 @@ Task<void> Connect() {
   Socket<arc::net::Domain::IPV4, arc::net::Protocol::TCP,
          arc::io::Pattern::ASYNC>
       client;
-  co_await client.Connect({"ip6-localhost", 8080});
+  // co_await client.Connect({"ip6-localhost", 8080});
+  co_await client.Connect({"localhost", 8080});
   std::cout << "before send" << std::endl;
   co_await client.Send(request);
   std::cout << "after send" << std::endl;

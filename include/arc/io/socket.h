@@ -43,6 +43,8 @@
 
 #include "io_base.h"
 
+#define RECV_BUFFER_SIZE 1024
+
 namespace arc {
 namespace coro {
 template <net::Domain AF, net::Protocol P, io::IOType T>
@@ -76,13 +78,11 @@ class SocketBase : public IOBase {
     if (fd_ < 0) {
       arc::utils::ThrowErrnoExceptions();
     }
-    buffer_ = new char[kRecvBufferSize_];
   }
 
   SocketBase(int fd, const net::Address<AF>& in_addr) {
     fd_ = fd;
     addr_ = in_addr;
-    buffer_ = new char[kRecvBufferSize_];
   }
 
   SocketBase(const SocketBase&) = delete;
@@ -98,7 +98,7 @@ class SocketBase : public IOBase {
     return *this;
   }
 
-  ~SocketBase() { delete[] buffer_; }
+  ~SocketBase() {}
 
   void Bind(const net::Address<AF>& addr) {
     addr_ = addr;
@@ -141,8 +141,7 @@ class SocketBase : public IOBase {
                                   sockaddr_in6>;
 
   net::Address<AF> addr_{};
-  const int kRecvBufferSize_{1024};
-  char* buffer_{nullptr};
+  char buffer_[RECV_BUFFER_SIZE] = {0};
   bool is_non_blocking_{false};
   bool is_bound_{false};
 
@@ -194,7 +193,7 @@ class SocketBase : public IOBase {
                           : max_recv_bytes);
     int left_size = max_recv_bytes;
     while (left_size > 0) {
-      int this_read_size = std::min(left_size, kRecvBufferSize_);
+      int this_read_size = std::min(left_size, RECV_BUFFER_SIZE);
       ssize_t tmp_read =
           recvfrom(this->fd_, buffer_, this_read_size, 0, nullptr, nullptr);
       if (tmp_read > 0) {
@@ -206,7 +205,7 @@ class SocketBase : public IOBase {
         }
         std::cout << "break" << std::endl;
         break;
-      } else if (tmp_read < kRecvBufferSize_) {
+      } else if (tmp_read < RECV_BUFFER_SIZE) {
         // we read all contents;
         break;
       }
@@ -217,10 +216,8 @@ class SocketBase : public IOBase {
 
  private:
   void MoveFrom(SocketBase&& other) {
-    if (!buffer_) {
-      buffer_ = new char[kRecvBufferSize_];
-    }
-    std::memcpy(buffer_, other.buffer_, other.kRecvBufferSize_);
+    std::memset(buffer_, 0, RECV_BUFFER_SIZE);
+    std::memcpy(buffer_, other.buffer_, RECV_BUFFER_SIZE);
     addr_ = std::move(other.addr_);
     is_non_blocking_ = other.is_non_blocking_;
   }

@@ -30,16 +30,17 @@
 
 using namespace arc::coro;
 
-void arc::coro::EnsureFuture(Task<void> task) { task.Start(); }
+void arc::coro::EnsureFuture(Task<void>&& task) { task.Start(true); }
 
 void arc::coro::RunUntilComplelete() {
   auto& event_loop = GetLocalEventLoop();
   while (!event_loop.IsDone()) {
     event_loop.Do();
   }
+  event_loop.CleanUpFinishedCoroutines();
 }
 
-void arc::coro::StartEventLoop(Task<void> task) {
-  task.Start();
+void arc::coro::StartEventLoop(Task<void>&& task) {
+  task.Start(true);
   RunUntilComplelete();
 }

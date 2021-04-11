@@ -40,6 +40,20 @@ concept CopyableMoveableOrVoid =
     std::is_void_v<T> || std::is_copy_constructible_v<T> ||
     std::is_move_constructible_v<T>;
 
+template <typename T>
+concept PromiseT = requires (T t) {
+  { t.initial_suspend() };
+  { t.final_suspend() };
+};
+
+template <typename T>
+concept Movable = 
+#ifdef __clang__
+std::is_move_constructible_v<T>;
+#else
+std::movable<T>;
+#endif
+
 }  // namespace concepts
 }  // namespace arc
 

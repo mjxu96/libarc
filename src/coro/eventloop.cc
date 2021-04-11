@@ -52,7 +52,10 @@ void EventLoop::Do() {
         finished_coro_events_.erase(finished_coro_events_itr);
   }
 
+  CleanUpFinishedCoroutines();
+
   if (total_added_task_num_ <= 0) {
+    assert(to_clean_up_handles_.empty());
     return;
   }
 
@@ -254,6 +257,18 @@ int EventLoop::GetExistIOEvent(int fd) {
     }
   }
   return prev;
+}
+
+void EventLoop::AddToCleanUpCoroutine(std::coroutine_handle<> handle) {
+  to_clean_up_handles_.push_back(handle);
+}
+
+void EventLoop::CleanUpFinishedCoroutines() {
+  auto to_clean_up_handles_itr = to_clean_up_handles_.begin();
+  while (to_clean_up_handles_itr != to_clean_up_handles_.end()) {
+    to_clean_up_handles_itr->destroy();
+    to_clean_up_handles_itr = to_clean_up_handles_.erase(to_clean_up_handles_itr);
+  }
 }
 
 arc::coro::EventLoop& arc::coro::GetLocalEventLoop() {

@@ -68,7 +68,10 @@ class EventLoop : public io::detail::IOBase {
   void AddCoroutine(events::CoroTaskEvent* event);
   void FinishCoroutine(std::uint64_t coro_id);
 
+  void AddToCleanUpCoroutine(std::coroutine_handle<> handle);
+
   void CleanUp();
+  void CleanUpFinishedCoroutines();
 
  private:
   const static int kMaxEventsSizePerWait_ = 1024;
@@ -99,6 +102,8 @@ class EventLoop : public io::detail::IOBase {
   // int IsFdExistInOtherTypeTodoEvents(int fd, io::IOType exclude_event);
   // int GetEpollFlagFromIOType(io::IOType type);
   // std::pair<int, io::IOType> GetFdAndIOTypeFromEpollEvent(uint64_t u);
+
+  std::list<std::coroutine_handle<>> to_clean_up_handles_{};
 };
 
 EventLoop& GetLocalEventLoop();

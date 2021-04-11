@@ -38,10 +38,11 @@
 #ifdef __clang__
 #include <experimental/coroutine>
 namespace std {
-  using experimental::coroutine_handle;
-  using experimental::suspend_always;
-  using experimental::suspend_never;
-}
+using experimental::coroutine_handle;
+using experimental::noop_coroutine;
+using experimental::suspend_always;
+using experimental::suspend_never;
+}  // namespace std
 #else
 #include <coroutine>
 #endif
@@ -52,269 +53,228 @@ namespace std {
 namespace arc {
 namespace coro {
 
-template <arc::concepts::CopyableMoveableOrVoid T>
-class[[nodiscard]] Task;
-
-namespace detail {
-
-class TaskBase;
-struct PromiseBase;
-
-enum class CoroReturnValueType {
-  UNKNOWN = 0U,
-  VALUE = 1U,
-  EXCEPTION = 2U,
+enum class ReturnType {
+  NONE = 0U,
+  VALUE,
+  EXCEPTION,
 };
 
-struct CoroReturnPack {
-  std::exception_ptr ret_exception_ptr{nullptr};
-  CoroReturnValueType return_type{CoroReturnValueType::UNKNOWN};
-};
-
-class TaskBase {
+class PromiseBase {
  public:
-  bool await_ready() { return false; }
+  PromiseBase() = default;
+  auto initial_suspend() { return std::suspend_always{}; }
 
-  friend struct PromiseBase;
+  auto final_suspend() noexcept { return FinalAwaiter{}; }
 
-  std::exception_ptr CopyExceptionPtr(std::exception_ptr excp_ptr) {
-    if (!excp_ptr) {
-      return excp_ptr;
-    }
-    try {
-      std::rethrow_exception(excp_ptr);
-    } catch (const std::exception& e) {
-      return std::current_exception();
-    }
+  void SetContinuation(std::coroutine_handle<> continuation) {
+    continuation_coro_ = continuation;
   }
 
-  virtual void CleanUp() {
-    if (this->ret_pack_->ret_exception_ptr) {
-      this->ret_pack_->ret_exception_ptr.~exception_ptr();
-      this->ret_pack_->ret_exception_ptr = nullptr;
+  void SetNeedClean(bool need_clean = true) { need_manual_clean_ = need_clean; }
+
+ protected:
+  friend struct FinalAwaiter;
+  struct FinalAwaiter {
+    FinalAwaiter() noexcept = default;
+
+    bool await_ready() noexcept { return false; }
+
+    template <arc::concepts::PromiseT PromiseType>
+    std::coroutine_handle<> await_suspend(
+        std::coroutine_handle<PromiseType> coro) noexcept {
+      return coro.promise().continuation_coro_;
     }
-    if (ret_pack_) {
-      delete ret_pack_;
-      ret_pack_ = nullptr;
-    }
-  }
 
- public:
-  PromiseBase* promise_{nullptr};
-  CoroReturnPack* ret_pack_{nullptr};
-};
-
-struct PromiseBase {
- public:
-  PromiseBase() { ret_pack_ = new CoroReturnPack{}; }
-
-  void CleanUp() {
-    if (this->ret_pack_->ret_exception_ptr) {
-      this->ret_pack_->ret_exception_ptr.~exception_ptr();
-      this->ret_pack_->ret_exception_ptr = nullptr;
-    }
-    if (ret_pack_) {
-      delete ret_pack_;
-      ret_pack_ = nullptr;
-    }
-  }
-
-  void CreateAndAddCoroEvent(std::coroutine_handle<void> handle) {
-    coro_event_ = new events::CoroTaskEvent{handle};
-    is_this_promise_added_to_coro_tasks_ = true;
-    GetLocalEventLoop().AddCoroutine(coro_event_);
-  }
-
-  void TriggerCoroEvent() noexcept {
-    if (is_this_promise_added_to_coro_tasks_) {
-      GetLocalEventLoop().FinishCoroutine(coro_event_->GetCoroId());
-    }
-  }
-
-  auto initial_suspend() noexcept { return std::suspend_always{}; }
-  auto final_suspend() noexcept {
-    TriggerCoroEvent();
-    return std::suspend_never{};
-  }
-
-  void unhandled_exception() {
-    if (!is_this_promise_added_to_coro_tasks_) {
-      CleanUp();
-      std::rethrow_exception(std::current_exception());
-    }
-    ret_pack_->ret_exception_ptr = std::current_exception();
-    ret_pack_->return_type = CoroReturnValueType::EXCEPTION;
-  }
-
-  CoroReturnPack* ret_pack_{nullptr};
-  bool is_this_promise_added_to_coro_tasks_{false};
-  events::CoroTaskEvent* coro_event_{nullptr};
-};
-
-}  // namespace detail
-
-template <>
-class[[nodiscard]] Task<void> : public detail::TaskBase {
- public:
-  struct promise_type : public detail::PromiseBase {
-    void return_void() {
-      if (ret_pack_->return_type == detail::CoroReturnValueType::EXCEPTION) {
-        return;
-      }
-      if (is_this_promise_added_to_coro_tasks_) {
-        ret_pack_->return_type = detail::CoroReturnValueType::VALUE;
-      } else {
-        CleanUp();
-      }
-    }
-    promise_type* get_return_object() noexcept { return this; }
+    void await_resume() noexcept {}
   };
 
-  Task(promise_type * p) noexcept {
-    promise_ = p;
-    this->ret_pack_ = promise_->ret_pack_;
-  }
+  std::coroutine_handle<> continuation_coro_{std::noop_coroutine()};
+  ReturnType return_type_{ReturnType::NONE};
+  bool need_manual_clean_{false};
+};
 
-  void Result() {
-    switch (this->ret_pack_->return_type) {
-      [[unlikely]] case detail::CoroReturnValueType::EXCEPTION : {
-        auto tmp_exception =
-            CopyExceptionPtr(this->ret_pack_->ret_exception_ptr);
-        this->ret_pack_->ret_exception_ptr = nullptr;
-        CleanUp();
-        std::rethrow_exception(tmp_exception);
-      }
-      break;
+template <typename T>
+class TaskPromise : public PromiseBase {
+ public:
+  TaskPromise() noexcept {}
+  ~TaskPromise() {
+    switch (return_type_) {
+      case ReturnType::VALUE:
+        value_.~T();
+        break;
+
+      case ReturnType::EXCEPTION:
+        exception_ptr_.~exception_ptr();
+        break;
+
       default:
         break;
     }
-    CleanUp();
-    return;
   }
 
-  // coro related
-  [[nodiscard]] std::coroutine_handle<promise_type> await_suspend(
-      std::coroutine_handle<void> parent_promise_handler) {
-    promise_->CreateAndAddCoroEvent(parent_promise_handler);
-    return std::coroutine_handle<promise_type>::from_promise(
-        *(static_cast<promise_type*>(promise_)));
-  }
+  TaskPromise* get_return_object() { return this; }
 
-  void
-  await_resume() {
-    Result();
-  }
-
-  void Start() {
-    auto handle = std::coroutine_handle<promise_type>::from_promise(
-        *(static_cast<promise_type*>(promise_)));
-    assert(!handle.done());
-    handle.resume();
-  }
-};
-
-template <arc::concepts::CopyableMoveableOrVoid T>
-class[[nodiscard]] Task : public detail::TaskBase {
- public:
-  struct promise_type : public detail::PromiseBase {
-    promise_type() : detail::PromiseBase() {
-      ret_ = new T*;
-      (*ret_) = nullptr;
+  void unhandled_exception() {
+    if (need_manual_clean_) {
+      GetLocalEventLoop().AddToCleanUpCoroutine(
+          std::coroutine_handle<TaskPromise<T>>::from_promise(*this));
     }
-
-    template <arc::concepts::CopyableMoveableOrVoid U = T>
-    requires (std::is_move_constructible_v<U>)
-    void return_value(U&& value) {
-      if (this->ret_pack_->return_type ==
-          detail::CoroReturnValueType::EXCEPTION) {
-        return;
-      }
-      *(this->ret_) =
-          new std::remove_reference_t<U>(std::move(std::forward<U&&>(value)));
-      this->ret_pack_->return_type =
-          arc::coro::detail::CoroReturnValueType::VALUE;
-    }
-
-    template <arc::concepts::CopyableMoveableOrVoid U = T>
-    requires (!std::is_move_constructible_v<U>)
-    void return_value(U&& value) {
-      if (this->ret_pack_->return_type ==
-          detail::CoroReturnValueType::EXCEPTION) {
-        return;
-      }
-      *(this->ret_) = new std::remove_reference_t<U>(std::forward<U&&>(value));
-      this->ret_pack_->return_type =
-          arc::coro::detail::CoroReturnValueType::VALUE;
-    }
-
-    promise_type* get_return_object() noexcept { return this; }
-
-    friend class Task<T>;
-
-   private:
-    T** ret_{nullptr};
-  };
-
-  Task(promise_type * p) noexcept {
-    promise_ = p;
-    this->ret_pack_ = promise_->ret_pack_;
-    ret_ = p->ret_;
-  }
-
-  void CleanUp() override {
-    TaskBase::CleanUp();
-    if (ret_) {
-      if (*ret_) {
-        delete (*ret_);
-        (*ret_) = nullptr;
-      }
-      delete ret_;
-      ret_ = nullptr;
+    return_type_ = ReturnType::EXCEPTION;
+    // ::new (static_cast<void*>(std::addressof(exception_ptr_)))
+    // std::exception_ptr( 			std::current_exception());
+    exception_ptr_ = std::current_exception();
+    if (continuation_coro_ == std::noop_coroutine()) {
+      std::rethrow_exception(exception_ptr_);
     }
   }
 
-  T Result() {
-    switch (this->ret_pack_->return_type) {
-      [[likely]] case detail::CoroReturnValueType::VALUE : {
-        T ret_value = std::move(*(*(ret_)));
-        CleanUp();
-        return std::move(ret_value);
-      }
-      [[unlikely]] case detail::CoroReturnValueType::EXCEPTION : {
-        auto tmp_exception =
-            CopyExceptionPtr(this->ret_pack_->ret_exception_ptr);
-        this->ret_pack_->ret_exception_ptr = nullptr;
-        CleanUp();
-        std::rethrow_exception(tmp_exception);
-      }
-      break;
-      default:
-        // TODO change this
-        throw std::logic_error("cannot be here");
+  template <typename U = T>
+  void return_value(U&& value) {
+    if (return_type_ == ReturnType::EXCEPTION) {
+      return;
     }
+    if (need_manual_clean_) {
+      GetLocalEventLoop().AddToCleanUpCoroutine(
+          std::coroutine_handle<TaskPromise<T>>::from_promise(*this));
+    }
+    // ::new (static_cast<void*>(std::addressof(value_)))
+    // T(std::forward<VALUE>(value));
+    value_ = std::forward<U>(value);
+    return_type_ = ReturnType::VALUE;
   }
 
-  // coro related
-  [[nodiscard]] std::coroutine_handle<promise_type> await_suspend(
-      std::coroutine_handle<void> parent_promise_handler) {
-    promise_->CreateAndAddCoroEvent(parent_promise_handler);
-    return std::coroutine_handle<promise_type>::from_promise(
-        *(static_cast<promise_type*>(promise_)));
+  template <typename U = T>
+  requires(!arc::concepts::Movable<U>) U& Result() {
+    if (this->return_type_ == ReturnType::EXCEPTION) {
+      std::rethrow_exception(this->exception_ptr_);
+    }
+    assert(this->return_type_ == ReturnType::VALUE);
+    return this->value_;
   }
 
-  T await_resume() {
-    return Result();
+  template <typename U = T>
+  requires(arc::concepts::Movable<U>) U&& Result() {
+    if (this->return_type_ == ReturnType::EXCEPTION) {
+      std::rethrow_exception(this->exception_ptr_);
+    }
+    assert(this->return_type_ == ReturnType::VALUE);
+    return std::move(this->value_);
   }
 
  private:
-  T** ret_{nullptr};
+  union {
+    T value_;
+    std::exception_ptr exception_ptr_{nullptr};
+  };
 };
 
-void EnsureFuture(Task<void> task);
+template <>
+class TaskPromise<void> : public PromiseBase {
+ public:
+  TaskPromise() = default;
+  ~TaskPromise() {
+    if (return_type_ == ReturnType::EXCEPTION) {
+      exception_ptr_.~exception_ptr();
+    }
+  }
+
+  void unhandled_exception() {
+    if (need_manual_clean_) {
+      GetLocalEventLoop().AddToCleanUpCoroutine(
+          std::coroutine_handle<TaskPromise<void>>::from_promise(*this));
+    }
+    return_type_ = ReturnType::EXCEPTION;
+    exception_ptr_ = std::current_exception();
+    if (continuation_coro_ == std::noop_coroutine()) {
+      std::rethrow_exception(exception_ptr_);
+    }
+  }
+
+  TaskPromise* get_return_object() { return this; }
+
+  void return_void() {
+    if (need_manual_clean_) {
+      GetLocalEventLoop().AddToCleanUpCoroutine(
+          std::coroutine_handle<TaskPromise<void>>::from_promise(*this));
+    }
+    if (return_type_ == ReturnType::EXCEPTION) {
+      return;
+    }
+    return_type_ = ReturnType::VALUE;
+  }
+
+  void Result() {
+    if (return_type_ == ReturnType::EXCEPTION) {
+      std::rethrow_exception(exception_ptr_);
+    }
+    return;
+  }
+
+ private:
+  std::exception_ptr exception_ptr_{nullptr};
+};
+
+template <arc::concepts::CopyableMoveableOrVoid T>
+class [[nodiscard]] Task {
+ public:
+  using promise_type = TaskPromise<T>;
+
+  Task(promise_type* promise)
+      : coroutine_(
+            std::coroutine_handle<promise_type>::from_promise(*promise)) {
+            }
+
+  Task(Task&& other) : coroutine_(other.coroutine_) {
+    other.coroutine_ = nullptr;
+  }
+
+  Task(const Task&) = delete;
+
+  ~Task() {
+    if (coroutine_) {
+      if (coroutine_.done()) {
+        coroutine_.destroy();
+      } else {
+        coroutine_.promise().SetNeedClean(need_clean_);
+      }
+    }
+  }
+
+  Task& operator=(Task&& other) {
+    if (std::addressof(other) != this) {
+      if (coroutine_) {
+        coroutine_.destroy();
+      }
+      coroutine_ = other.coroutine_;
+      other.coroutine_ = nullptr;
+    }
+    return *this;
+  }
+
+  Task& operator=(const Task& other) = delete;
+
+  void Start(bool need_clean = false) {
+    need_clean_ = need_clean;
+    coroutine_.resume();
+  }
+
+  bool await_ready() { return (!coroutine_ || coroutine_.done()); }
+  std::coroutine_handle<> await_suspend(std::coroutine_handle<> continuation) {
+    coroutine_.promise().SetContinuation(continuation);
+    return coroutine_;
+  }
+  T await_resume() { return coroutine_.promise().Result(); }
+
+ private:
+  std::coroutine_handle<promise_type> coroutine_{nullptr};
+  bool need_clean_{false};
+};
+
+void EnsureFuture(Task<void>&& task);
 
 void RunUntilComplelete();
 
-void StartEventLoop(Task<void> task);
+void StartEventLoop(Task<void>&& task);
 
 }  // namespace coro
 }  // namespace arc

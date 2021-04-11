@@ -46,6 +46,7 @@ class IOAwaiter {
           typename std::conditional_t<T == io::IOType::CONNECT,
                                       const net::Address<AF>*, void*>>>;
 
+  // TODO write buffer may be full so that *storage might be invalid when resuming
   IOAwaiter(io::Socket<AF, P, io::Pattern::ASYNC>* sock, StorageType storage)
       : sock_(sock), storage_(storage) {}
 
