@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.12.0)
 
-project(libarc)
+project(arc)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   # using Clang
@@ -13,6 +13,10 @@ endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} ${CXX_COROUTINE_COMPILE_FLAGS}")
-set(LIBARC_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_subdirectory("cmake")
+
+install (
+    EXPORT arcConfig
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/arc/cmake NAMESPACE arc::
+)
