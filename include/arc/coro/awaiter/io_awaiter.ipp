@@ -31,7 +31,9 @@
 
 #include <arc/coro/eventloop.h>
 #include <arc/coro/events/io_event_base.h>
+#include <arc/exception/io.h>
 // #include <arc/io/socket.h>
+#include <functional>
 
 namespace arc {
 namespace coro {
@@ -45,6 +47,8 @@ class IOAwaiter {
           T == io::IOType::WRITE, const std::string*,
           typename std::conditional_t<T == io::IOType::CONNECT,
                                       const net::Address<AF>*, void*>>>;
+  
+  // using ResumeFuncRetType = typename std::conditional_t<
 
   // TODO write buffer may be full so that *storage might be invalid when resuming
   IOAwaiter(io::Socket<AF, P, io::Pattern::ASYNC>* sock, StorageType storage)
@@ -65,7 +69,7 @@ class IOAwaiter {
         return false;
       }
     }
-    arc::utils::ThrowErrnoExceptions();
+    throw arc::exception::IOException("Connection Error");
     return true;
   }
 
@@ -76,7 +80,7 @@ class IOAwaiter {
       if (errno == EAGAIN || errno == EWOULDBLOCK) {
         return false;
       }
-      arc::utils::ThrowErrnoExceptions();
+      throw arc::exception::IOException("Send Error");
     }
     return true;
   }

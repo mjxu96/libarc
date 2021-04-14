@@ -32,7 +32,9 @@
 #include <arc/coro/eventloop.h>
 #include <arc/coro/events/io_event_base.h>
 #include <arc/io/utils.h>
+#include <arc/io/ssl.h>
 #include <arc/net/address.h>
+#include <arc/exception/io.h>
 #include <arc/utils/exception.h>
 #include <fcntl.h>
 #include <netdb.h>
@@ -76,7 +78,7 @@ class SocketBase : public IOBase {
       }
     }
     if (fd_ < 0) {
-      arc::utils::ThrowErrnoExceptions();
+      throw arc::exception::IOException();
     }
   }
 
@@ -98,12 +100,12 @@ class SocketBase : public IOBase {
     return *this;
   }
 
-  ~SocketBase() {}
+  virtual ~SocketBase() {}
 
   void Bind(const net::Address<AF>& addr) {
     addr_ = addr;
     if (bind(this->fd_, addr_.GetCStyleAddress(), addr_.AddressSize()) < 0) {
-      arc::utils::ThrowErrnoExceptions();
+      throw arc::exception::IOException();
     }
     is_bound_ = true;
   }
@@ -111,14 +113,14 @@ class SocketBase : public IOBase {
   void SetOption(arc::net::SocketOption option_name, int opt_value) {
     if (setsockopt(fd_, (int)(arc::net::SocketLevel::SOCKET), (int)option_name,
                    &opt_value, sizeof(opt_value)) < 0) {
-      arc::utils::ThrowErrnoExceptions();
+      throw arc::exception::IOException();
     }
   }
 
   void SetNonBlocking(bool is_enabled = true) {
     int flags = fcntl(fd_, F_GETFL);
     if (flags < 0) {
-      arc::utils::ThrowErrnoExceptions();
+      throw arc::exception::IOException();
     }
     if (is_enabled) {
       flags = fcntl(fd_, F_SETFL, flags | O_NONBLOCK);
@@ -126,7 +128,7 @@ class SocketBase : public IOBase {
       flags = fcntl(fd_, F_SETFL, flags & (~O_NONBLOCK));
     }
     if (flags < 0) {
-      arc::utils::ThrowErrnoExceptions();
+      throw arc::exception::IOException();
     }
     is_non_blocking_ = is_enabled;
   }
@@ -145,13 +147,21 @@ class SocketBase : public IOBase {
   bool is_non_blocking_{false};
   bool is_bound_{false};
 
+  virtual inline int InternalVirtualSendTo(int fd, const void *buf, size_t n, int flags, const sockaddr *addr, socklen_t addr_len) {
+    return sendto(fd, buf, n, flags, addr, addr_len);
+  }
+
+  virtual inline ssize_t InternalVirtualRecvFrom(int fd, void * __restrict__ buf, size_t n, int flags, sockaddr *__restrict__ addr, socklen_t *__restrict__ addr_len) {
+    return recvfrom(fd, buf, n, flags, addr, addr_len);
+  }
+
   template <net::Domain UAF>
   int InternalSendTo(const std::string& data, const net::Address<UAF>* addr) {
-    int sent = sendto(this->fd_, data.c_str(), data.size(), 0,
+    int sent = InternalVirtualSendTo(this->fd_, data.c_str(), data.size(), 0,
                       (addr ? addr->GetCStyleAddress() : nullptr),
                       (addr ? addr->AddressSize() : 0));
     if (sent < 0) {
-      arc::utils::ThrowErrnoExceptions();
+      throw arc::exception::IOException();
     }
     return sent;
   }
@@ -159,7 +169,7 @@ class SocketBase : public IOBase {
   template <net::Domain UAF>
   int InternalTrySendTo(const std::string& data,
                         const net::Address<UAF>* addr) {
-    return sendto(this->fd_, data.c_str(), data.size(), 0,
+    return InternalVirtualSendTo(this->fd_, data.c_str(), data.size(), 0,
                   (addr ? addr->GetCStyleAddress() : nullptr),
                   (addr ? addr->AddressSize() : 0));
   }
@@ -177,10 +187,10 @@ class SocketBase : public IOBase {
       socklen_t in_addr_len;
       std::string ret;
       ret.reserve(max_recv_bytes);
-      ssize_t tmp_read = recvfrom(this->fd_, ret.data(), max_recv_bytes, 0,
+      ssize_t tmp_read = InternalVirtualRecvFrom(this->fd_, ret.data(), max_recv_bytes, 0,
                                   &in_addr, &in_addr_len);
       if (tmp_read == -1) {
-        arc::utils::ThrowErrnoExceptions();
+        throw arc::exception::IOException();
       }
       (*addr) = *((CAddressType*)(&in_addr));
       return ret;
@@ -195,13 +205,13 @@ class SocketBase : public IOBase {
     while (left_size > 0) {
       int this_read_size = std::min(left_size, RECV_BUFFER_SIZE);
       ssize_t tmp_read =
-          recvfrom(this->fd_, buffer_, this_read_size, 0, nullptr, nullptr);
+          InternalVirtualRecvFrom(this->fd_, buffer_, this_read_size, 0, nullptr, nullptr);
       if (tmp_read > 0) {
         buffer.append(buffer_, tmp_read);
       }
       if (tmp_read == -1) {
         if (errno != EAGAIN || errno != EWOULDBLOCK) {
-          arc::utils::ThrowErrnoExceptions();
+          throw arc::exception::IOException();
         }
         std::cout << "break" << std::endl;
         break;
@@ -270,6 +280,8 @@ class Socket : public detail::SocketBase<AF,
     return *this;
   }
 
+  virtual ~Socket() {}
+
   template <net::Protocol UP = P, Pattern UPP = PP>
       requires(UP == net::Protocol::TCP) &&
       (UPP == Pattern::SYNC) int Send(const std::string& data) {
@@ -336,7 +348,7 @@ class Socket : public detail::SocketBase<AF,
   friend class arc::coro::IOAwaiter<AF, P, io::IOType::READ>;
   friend class arc::coro::IOAwaiter<AF, P, io::IOType::WRITE>;
 
- private:
+ protected:
   template <net::Protocol UP = P>
   requires(UP == net::Protocol::TCP) int InternalSend(const std::string& data) {
     return this->template InternalSendTo<AF>(data, nullptr);
@@ -354,20 +366,105 @@ class Socket : public detail::SocketBase<AF,
     return this->template InternalRecvFrom<AF>(max_recv_bytes, nullptr);
   }
 
-  template <net::Protocol UP = P>
-  requires(UP == net::Protocol::TCP) void InternalConnect(
+  virtual void InternalConnect(
       const net::Address<AF>& addr) {
+    static_assert(P != net::Protocol::UDP);
     int res = connect(this->fd_, addr.GetCStyleAddress(), addr.AddressSize());
     if (res < 0) {
-      arc::utils::ThrowErrnoExceptions();
+      throw arc::exception::IOException();
     }
   }
-  template <net::Protocol UP = P>
-  requires(UP == net::Protocol::TCP) bool InternalTryConnect(
+
+  virtual bool InternalTryConnect(
       const net::Address<AF>& addr) {
+    static_assert(P != net::Protocol::UDP);
     return (connect(this->fd_, addr.GetCStyleAddress(), addr.AddressSize()) ==
             0);
   }
+};
+
+template <net::Domain AF = net::Domain::IPV4, Pattern PP = Pattern::SYNC>
+class TLSSocket : public Socket<AF, net::Protocol::TCP, PP> {
+ public:
+  TLSSocket(TLSProtocol protocol, TLSProtocolType type = TLSProtocolType::CLIENT) : 
+    Socket<AF, net::Protocol::TCP, PP>(),
+    context_ptr_(&GetGlobalSSLContext(protocol, type)),
+    ssl_(context_ptr_->FetchSSL()) {
+      BindFdWithSSL();
+    }
+
+  virtual ~TLSSocket() {
+    if (context_ptr_) {
+      context_ptr_->FreeSSL(ssl_);
+    }
+  }
+  TLSSocket(int fd, const net::Address<AF>& in_addr, TLSProtocol protocol, TLSProtocolType type = TLSProtocolType::CLIENT) : 
+      Socket<AF, net::Protocol::TCP, PP>(fd, in_addr), 
+      context_ptr_(&GetGlobalSSLContext(protocol, type)),
+    ssl_(context_ptr_->FetchSSL()) {
+      BindFdWithSSL();
+    }
+
+  TLSSocket(const TLSSocket&) = delete;
+  TLSSocket& operator=(const TLSSocket&) = delete;
+  TLSSocket(TLSSocket&& other) : Socket<AF, net::Protocol::TCP, PP>(std::move(other)),
+    context_ptr_(other.context_ptr_), ssl_(other.ssl_) {
+    other.context_ptr_ = nullptr;
+    BindFdWithSSL();
+  }
+  TLSSocket& operator=(TLSSocket&& other) {
+    Socket<AF, net::Protocol::TCP, PP>::operator=(std::move(other));
+    if (ssl_.ssl && context_ptr_) {
+      context_ptr_->FreeSSL(ssl_);
+    }
+    context_ptr_ = other.context_ptr_;
+    ssl_ = other.ssl_;
+    other.context_ptr_ = nullptr;
+    BindFdWithSSL();
+    return *this;
+  }
+
+  friend class arc::coro::IOAwaiter<AF, net::Protocol::TCP, io::IOType::CONNECT>;
+  friend class arc::coro::IOAwaiter<AF, net::Protocol::TCP, io::IOType::READ>;
+  friend class arc::coro::IOAwaiter<AF, net::Protocol::TCP, io::IOType::WRITE>;
+ private:
+  virtual inline int InternalVirtualSendTo(int fd, const void *buf, size_t n, int flags, const sockaddr *addr, socklen_t addr_len) override {
+    return SSL_write(ssl_.ssl, buf, n);
+  }
+
+  virtual inline ssize_t InternalVirtualRecvFrom(int fd, void *__restrict__ buf, size_t n, int flags, sockaddr *__restrict__ addr, socklen_t *__restrict__ addr_len) override {
+    return SSL_read(ssl_.ssl, buf, n);
+  }
+
+  void InternalConnect(
+      const net::Address<AF>& addr) {
+    int res = connect(this->fd_, addr.GetCStyleAddress(), addr.AddressSize());
+    if (res < 0) {
+      throw arc::exception::IOException();
+    }
+    if (SSL_connect(ssl_.ssl) == -1) {
+      ERR_print_errors_fp(stderr);
+    }
+  }
+  bool InternalTryConnect(
+      const net::Address<AF>& addr) {
+    int res = connect(this->fd_, addr.GetCStyleAddress(), addr.AddressSize());
+    if (res == 0) {
+      if (SSL_connect(ssl_.ssl) == -1) {
+        ERR_print_errors_fp(stderr);
+        return false;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  void BindFdWithSSL() {
+    SSL_set_fd(ssl_.ssl, this->fd_);
+  }
+
+  io::SSLContext* context_ptr_{nullptr};
+  io::SSL ssl_{};
 };
 
 template <net::Domain AF = net::Domain::IPV4, Pattern PP = Pattern::SYNC>
@@ -391,7 +488,7 @@ class Acceptor : public Socket<AF, net::Protocol::TCP, PP> {
 
   void Listen(int max_pending_connections = 1024) {
     if (listen(this->fd_, max_pending_connections) < 0) {
-      arc::utils::ThrowErrnoExceptions();
+      throw arc::exception::IOException();
     }
     is_listened_ = true;
   }
@@ -434,7 +531,7 @@ class Acceptor : public Socket<AF, net::Protocol::TCP, PP> {
       int accept_fd =
           accept(this->fd_, (struct sockaddr*)&in_addr, (socklen_t*)&addrlen);
       if (accept_fd < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-        arc::utils::ThrowErrnoExceptions();
+        throw arc::exception::IOException();
       }
       if (accept_fd < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
         break;
@@ -454,7 +551,7 @@ class Acceptor : public Socket<AF, net::Protocol::TCP, PP> {
     int accept_fd =
         accept(this->fd_, (struct sockaddr*)&in_addr, (socklen_t*)&addrlen);
     if (accept_fd < 0) {
-      arc::utils::ThrowErrnoExceptions();
+      throw arc::exception::IOException();
     }
     return Socket<AF, net::Protocol::TCP, PP>(accept_fd, in_addr);
   }

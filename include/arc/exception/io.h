@@ -1,7 +1,7 @@
 /*
- * File: utils.h
+ * File: io.h
  * Project: libarc
- * File Created: Sunday, 13th December 2020 4:12:21 pm
+ * File Created: Wednesday, 14th April 2021 7:26:12 pm
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
@@ -26,26 +26,39 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef LIBARC__IO__UTILS_H
-#define LIBARC__IO__UTILS_H
+#ifndef LIBARC__EXCEPTION__IO_H
+#define LIBARC__EXCEPTION__IO_H
 
+#include "base.h"
 
 namespace arc {
-namespace io {
+namespace exception {
 
-enum class IOType {
-  READ = 0U,
-  WRITE = 1U,
-  ACCEPT = 2U,
-  CONNECT = 3U,
+class IOException : public detail::ErrnoException {
+ public:
+#ifdef __clang__
+  IOException(const std::string& msg = "");
+#else
+  IOException(const std::string& msg = "",
+              const std::experimental::source_location& source_location =
+                  std::experimental::source_location::current());
+#endif
 };
 
-enum class Pattern {
-  SYNC = 0U,
-  ASYNC = 1U,
+class TLSException : public detail::ExceptionBase {
+ public:
+#ifdef __clang__
+  TLSException(const std::string& msg = "");
+#else
+  TLSException(const std::string& msg = "",
+               const std::experimental::source_location& source_location =
+                   std::experimental::source_location::current());
+#endif
+ private:
+  std::string GetSSLError();
 };
 
-}  // namespace io
+}  // namespace exception
 }  // namespace arc
 
-#endif /* LIBARC__IO__UTILS_H */
+#endif

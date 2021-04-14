@@ -2,6 +2,7 @@
 include_directories("${CMAKE_SOURCE_DIR}/include")
 
 find_package (Threads)
+find_package(OpenSSL)
 
 set(ARC_CORO_FILES
   ${CMAKE_SOURCE_DIR}/src/coro/eventloop.cc
@@ -10,6 +11,13 @@ set(ARC_CORO_FILES
 
 set(ARC_IO_FILES
   ${CMAKE_SOURCE_DIR}/src/io/io_base.cc
+  ${CMAKE_SOURCE_DIR}/src/io/ssl.cc
+)
+
+set(ARC_EXCEPTION_FILES
+  ${CMAKE_SOURCE_DIR}/src/exception/base.cc
+  ${CMAKE_SOURCE_DIR}/src/exception/io.cc
+  ${CMAKE_SOURCE_DIR}/src/exception/net.cc
 )
 
 set(ARC_LOGGING_FILES
@@ -21,11 +29,13 @@ add_library(arc
   ${CMAKE_SOURCE_DIR}/src/arc.cc
   ${ARC_CORO_FILES}
   ${ARC_IO_FILES}
+  ${ARC_EXCEPTION_FILES}
   ${ARC_LOGGING_FILES}
 )
 
 target_link_libraries(arc
   ${CMAKE_THREAD_LIBS_INIT}
+  OpenSSL::SSL OpenSSL::Crypto
 )
 
 target_include_directories(arc

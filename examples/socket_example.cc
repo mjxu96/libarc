@@ -30,12 +30,21 @@
 using namespace arc::io;
 using namespace arc::net;
 
+std::string req = "GET / HTTP/1.1\r\nHost: www.google.com\r\nConnection: close\r\n\r\n";
+
 void ConnectTest() {
   Socket sock;
   std::cout << "123" << std::endl;
-  sock.Connect({"localhost", 8080});
-  std::cout << sock.Send("123") << std::endl;
-  std::cout << sock.Recv(3) << std::endl;
+  sock.Connect({"www.google.com.hk", 80});
+  std::cout << sock.Send(req) << std::endl;
+  std::cout << sock.Recv() << std::endl;
+}
+
+void TLSConnectTest() {
+  TLSSocket sock(TLSProtocol::TLSv1_1);
+  sock.Connect({"www.google.com.hk", 443});
+  std::cout << sock.Send(req) << std::endl;
+  std::cout << sock.Recv() << std::endl;
 }
 
 void HandleClient(Socket<Domain::IPV4, Protocol::TCP, Pattern::SYNC> client) {
@@ -61,4 +70,7 @@ void AcceptTest() {
   MoveTest(std::move(acceptor));
 }
 
-int main() { AcceptTest(); }
+// int main() { AcceptTest(); }
+int main() { 
+  ConnectTest();
+  TLSConnectTest(); }

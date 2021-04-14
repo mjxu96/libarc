@@ -33,6 +33,7 @@
 #include <netdb.h>
 
 #include <arc/utils/nameof.hpp>
+#include <arc/exception/net.h>
 #include <cassert>
 #include <cstring>
 #include <stdexcept>
@@ -67,7 +68,7 @@ class Address {
         InitDnsAddress(host, port);
       }
     } else {
-      throw std::logic_error("Address family cannot be supported");
+      throw arc::exception::AddressException("Address family cannot be supported");
     }
   }
 
@@ -98,7 +99,7 @@ class Address {
 
   void Init(const CAddressType& addr, bool is_from_dns = false) {
     if (((int)AF) != ((sockaddr*)&addr)->sa_family) {
-      throw std::logic_error("Trying to attch a " +
+      throw arc::exception::AddressException("Trying to attch a " +
                              std::string(nameof::nameof_enum<Domain>(
                                  (Domain)((sockaddr*)&addr)->sa_family)) +
                              " address with a " +
@@ -147,7 +148,7 @@ class Address {
       freeaddrinfo(result);
     } else {
       freeaddrinfo(result);
-      throw std::logic_error("Cannot resolve " + host + ":" +
+      throw arc::exception::AddressException("Cannot resolve " + host + ":" +
                              std::to_string(port) + " to address family " +
                              std::string(nameof::nameof_enum<AF>()));
     }

@@ -1,7 +1,7 @@
 /*
- * File: utils.h
+ * File: net.h
  * Project: libarc
- * File Created: Sunday, 13th December 2020 4:12:21 pm
+ * File Created: Wednesday, 14th April 2021 8:29:29 pm
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
@@ -26,26 +26,26 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef LIBARC__IO__UTILS_H
-#define LIBARC__IO__UTILS_H
+#ifndef LIBARC__EXCEPTION__NET_H
+#define LIBARC__EXCEPTION__NET_H
 
+#include "io.h"
 
 namespace arc {
-namespace io {
+namespace exception {
 
-enum class IOType {
-  READ = 0U,
-  WRITE = 1U,
-  ACCEPT = 2U,
-  CONNECT = 3U,
+class AddressException : public detail::ErrnoException {
+ public:
+#ifdef __clang__
+  AddressException(const std::string& msg = "");
+#else
+  AddressException(const std::string& msg = "",
+               const std::experimental::source_location& source_location =
+                   std::experimental::source_location::current());
+#endif
 };
 
-enum class Pattern {
-  SYNC = 0U,
-  ASYNC = 1U,
-};
-
-}  // namespace io
+}  // namespace exception
 }  // namespace arc
 
-#endif /* LIBARC__IO__UTILS_H */
+#endif

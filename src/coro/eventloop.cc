@@ -27,13 +27,14 @@
  */
 
 #include <arc/coro/eventloop.h>
+#include <arc/exception/io.h>
 
 using namespace arc::coro;
 
 EventLoop::EventLoop() {
   fd_ = epoll_create1(0);
   if (fd_ < 0) {
-    arc::utils::ThrowErrnoExceptions();
+    throw arc::exception::IOException();
   }
 }
 
@@ -75,7 +76,7 @@ void EventLoop::Do() {
     }
     if (event_type && ((event_type & EPOLLIN) == 0) &&
         ((event_type & EPOLLOUT) == 0)) {
-      arc::utils::ThrowErrnoExceptions();
+      throw arc::exception::IOException();
     }
   }
   // currently we enforce this constraint
@@ -122,7 +123,7 @@ void EventLoop::AddIOEvent(events::detail::IOEventBase* event) {
 
     int epoll_ret = epoll_ctl(fd_, op, target_fd, &e_event);
     if (epoll_ret != 0) {
-      arc::utils::ThrowErrnoExceptions();
+      throw arc::exception::IOException();
     }
   } else {
     // already added
@@ -193,7 +194,7 @@ void EventLoop::RemoveIOEvent(events::detail::IOEventBase* event, bool forced) {
     epoll_ret = epoll_ctl(fd_, op, target_fd, &e_event);
   }
   if (epoll_ret != 0) {
-    arc::utils::ThrowErrnoExceptions();
+    throw arc::exception::IOException();
   }
 }
 

@@ -1,7 +1,7 @@
 /*
- * File: utils.h
+ * File: io.cc
  * Project: libarc
- * File Created: Sunday, 13th December 2020 4:12:21 pm
+ * File Created: Wednesday, 14th April 2021 7:33:28 pm
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
@@ -26,26 +26,46 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef LIBARC__IO__UTILS_H
-#define LIBARC__IO__UTILS_H
+#include <arc/exception/io.h>
+#include <openssl/err.h>
 
+#include <system_error>
 
-namespace arc {
-namespace io {
+using namespace arc::exception;
+using namespace arc::exception::detail;
 
-enum class IOType {
-  READ = 0U,
-  WRITE = 1U,
-  ACCEPT = 2U,
-  CONNECT = 3U,
-};
+#ifdef __clang__
+IOException::IOException(const std::string& msg) : ErrnoException(msg) {
+#else
+IOException::IOException(
+    const std::string& msg,
+    const std::experimental::source_location& source_location)
+    : ErrnoException(msg, source_location) {
+#endif
+  int err = errno;
+  if (err != 0) {
+    std::string err_string =
+        std::error_code(err, std::generic_category()).message();
+    std::string err_code = " [" + std::to_string(err) + "] ";
+    msg_ += err_code + err_string;
+  }
+}
 
-enum class Pattern {
-  SYNC = 0U,
-  ASYNC = 1U,
-};
+#ifdef __clang__
+TLSException::TLSException(const std::string& msg) : ExceptionBase(msg) {
+#else
+TLSException::TLSException(
+    const std::string& msg,
+    const std::experimental::source_location& source_location)
+    : ExceptionBase(msg, source_location) {
+#endif
+  msg_ += GetSSLError();
+}
 
-}  // namespace io
-}  // namespace arc
-
-#endif /* LIBARC__IO__UTILS_H */
+std::string TLSException::GetSSLError() {
+  int err = ERR_get_error();
+  if (err != 0) {
+    return std::string(ERR_reason_error_string(err));
+  }
+  return "";
+}
