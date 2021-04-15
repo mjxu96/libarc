@@ -37,7 +37,8 @@ namespace arc {
 namespace io {
 
 enum class TLSProtocol {
-  SSLv2 = 0U,
+  NOT_SPEC = 0U,
+  SSLv2,
   SSLv3,
   SSLv23,
   TLSv1,
@@ -48,7 +49,7 @@ enum class TLSProtocol {
 enum class TLSProtocolType {
   CLIENT = 0U,
   SERVER,
-  NONE,
+  NOT_SPEC,
 };
 
 struct SSL {
@@ -65,6 +66,7 @@ class SSLContext {
   SSLContext(SSLContext&&);
   SSLContext& operator=(SSLContext&&);
   ~SSLContext();
+  void SetCertificateAndKey(const std::string& cert_file, const std::string& key_file);
   SSL FetchSSL();
   void FreeSSL(SSL& ssl);
  private:

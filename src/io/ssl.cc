@@ -28,9 +28,8 @@
 
 #include <arc/io/ssl.h>
 #include <arc/utils/nameof.hpp>
-#include <stdexcept>
+#include <arc/exception/io.h>
 #include <string>
-#include <openssl/err.h>
 #include <unordered_map>
 
 using namespace arc::io;
@@ -40,34 +39,38 @@ SSLContext::SSLContext(TLSProtocol protocol, TLSProtocolType type) :
   const SSL_METHOD* method = nullptr;
   OpenSSL_add_all_algorithms();
   SSL_load_error_strings();
-  if (type_ == TLSProtocolType::NONE) {
-    throw std::logic_error("Must specify whether TLS is for a client or a server");
-  }
-  if (protocol_ == TLSProtocol::TLSv1) {
-    if (type_ == TLSProtocolType::CLIENT) {
-      method = TLSv1_client_method();
-    } else {
-      method = TLSv1_server_method();
-    }
-  } else if (protocol_ == TLSProtocol::TLSv1_1) {
-    if (type_ == TLSProtocolType::CLIENT) {
-      method = TLSv1_1_client_method();
-    } else {
-      method = TLSv1_1_server_method();
-    }
-  } else if (protocol_ == TLSProtocol::TLSv1_2) {
-    if (type_ == TLSProtocolType::CLIENT) {
-      method = TLSv1_2_client_method();
-    } else {
-      method = TLSv1_2_server_method();
-    }
+  if (type_ == TLSProtocolType::NOT_SPEC) {
+    method = TLS_method();
+  } else if (type_ == TLSProtocolType::CLIENT) {
+    method = TLS_client_method();
   } else {
-    std::string error = std::string(nameof::nameof_enum(protocol)) + std::string(" is not accepted");
-    throw std::logic_error(error);
+    method = TLS_server_method();
   }
+  // if (protocol_ == TLSProtocol::TLSv1) {
+  //   if (type_ == TLSProtocolType::CLIENT) {
+  //     method = TLSv1_client_method();
+  //   } else {
+  //     method = TLSv1_server_method();
+  //   }
+  // } else if (protocol_ == TLSProtocol::TLSv1_1) {
+  //   if (type_ == TLSProtocolType::CLIENT) {
+  //     method = TLSv1_1_client_method();
+  //   } else {
+  //     method = TLSv1_1_server_method();
+  //   }
+  // } else if (protocol_ == TLSProtocol::TLSv1_2) {
+  //   if (type_ == TLSProtocolType::CLIENT) {
+  //     method = TLSv1_2_client_method();
+  //   } else {
+  //     method = TLSv1_2_server_method();
+  //   }
+  // } else {
+  //   std::string error = std::string(nameof::nameof_enum(protocol)) + std::string(" is not accepted");
+  //   throw std::logic_error(error);
+  // }
   context_ = SSL_CTX_new(method);
   if (!context_) {
-    throw std::logic_error(GetSSLError());
+    throw arc::exception::TLSException("SSL Context Creation Error");
   }
 }
 
@@ -89,6 +92,18 @@ SSLContext& SSLContext::operator=(SSLContext&& other) {
   protocol_ = other.protocol_;
   type_ = other.type_;
   return *this;
+}
+
+void SSLContext::SetCertificateAndKey(const std::string& cert_file, const std::string& key_file) {
+  if (SSL_CTX_use_certificate_file(context_, cert_file.c_str(), SSL_FILETYPE_PEM) != 1) {
+    throw arc::exception::TLSException("Load Cert Failure");
+  }
+  if (SSL_CTX_use_PrivateKey_file(context_, key_file.c_str(), SSL_FILETYPE_PEM) != 1) {
+    throw arc::exception::TLSException("Load PKey Failure");
+  }
+  if (SSL_CTX_check_private_key(context_) != 1) {
+    throw arc::exception::TLSException("Check PKey Failure");
+  }
 }
 
 arc::io::SSL SSLContext::FetchSSL() {

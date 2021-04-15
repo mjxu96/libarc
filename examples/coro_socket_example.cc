@@ -90,19 +90,33 @@ Task<void> Connect() {
   co_return;
 }
 
+Task<void> TLSConnect() {
+  const std::string request =
+      "GET / HTTP/1.1\r\nHost: www.baidu.com\r\nUser-Agent: "
+      "curl/7.58.0\r\nAccept: */*\r\n\r\n";
+  TLSSocket<Domain::IPV4, Pattern::ASYNC> tls_socket;
+  co_await tls_socket.Connect({"www.baidu.com", 443});
+  std::cout << "before send" << std::endl;
+  co_await tls_socket.Send(request);
+  std::cout << "after send" << std::endl;
+  std::cout << co_await tls_socket.Recv() << std::endl;
+  co_return;
+}
+
 void Start() { StartEventLoop(Listen()); }
 
 int main(int argc, char** argv) {
-  StartEventLoop(Connect());
-  std::vector<std::thread> threads;
-  int thread_num = std::stoi(std::string(argv[1]));
-  for (int i = 0; i < thread_num; i++) {
-    threads.emplace_back(Start);
-  }
+  // StartEventLoop(Connect());
+  // std::vector<std::thread> threads;
+  // int thread_num = std::stoi(std::string(argv[1]));
+  // for (int i = 0; i < thread_num; i++) {
+  //   threads.emplace_back(Start);
+  // }
 
-  for (int i = 0; i < thread_num; i++) {
-    threads[i].join();
-  }
+  // for (int i = 0; i < thread_num; i++) {
+  //   threads[i].join();
+  // }
 
-  std::cout << "finished" << std::endl;
+  // std::cout << "finished" << std::endl;
+  StartEventLoop(TLSConnect());
 }

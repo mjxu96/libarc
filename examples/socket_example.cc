@@ -31,6 +31,11 @@ using namespace arc::io;
 using namespace arc::net;
 
 std::string req = "GET / HTTP/1.1\r\nHost: www.google.com\r\nConnection: close\r\n\r\n";
+std::string response = "HTTP/1.1 200 OK\r\n"
+                    "Content-Length: 48\r\n"
+                    "Content-Type: text/html\r\n"
+                    "Connection: Closed\r\n\r\n"
+                    "<html><body><h1>Hello, World!</h1></body></html>";
 
 void ConnectTest() {
   Socket sock;
@@ -70,7 +75,30 @@ void AcceptTest() {
   MoveTest(std::move(acceptor));
 }
 
+void TLSAcceptTest() {
+  std::cout << "here" << std::endl;
+  TLSAcceptor acceptor("", "");
+  acceptor.Bind({"localhost", 8082});
+  acceptor.Listen();
+  acceptor.SetNonBlocking(false);
+  int cnt = 0;
+  while (cnt < 10) {
+    try {
+      auto new_sock = acceptor.Accept();
+      std::cout << new_sock.Recv() << std::endl;
+      std::cout << new_sock.Send(response) << std::endl;
+    } catch (const std::exception& e) {
+      std::cout << e.what() << std::endl;
+    }
+    cnt++;
+  }
+  std::cout << "here" << std::endl;
+}
+
 // int main() { AcceptTest(); }
-int main() { 
-  ConnectTest();
-  TLSConnectTest(); }
+// int main() { 
+//   ConnectTest();
+//   TLSConnectTest(); }
+int main() {
+  TLSAcceptTest();
+}

@@ -121,14 +121,14 @@ class TaskPromise : public PromiseBase {
     }
     return_type_ = ReturnType::EXCEPTION;
     // ::new (static_cast<void*>(std::addressof(exception_ptr_)))
-    // std::exception_ptr( 			std::current_exception());
+    //     std::exception_ptr(std::current_exception());
     exception_ptr_ = std::current_exception();
     if (continuation_coro_ == std::noop_coroutine()) {
       std::rethrow_exception(exception_ptr_);
     }
   }
 
-  template <typename U = T>
+  template <typename U>
   void return_value(U&& value) {
     if (return_type_ == ReturnType::EXCEPTION) {
       return;
@@ -137,9 +137,8 @@ class TaskPromise : public PromiseBase {
       GetLocalEventLoop().AddToCleanUpCoroutine(
           std::coroutine_handle<TaskPromise<T>>::from_promise(*this));
     }
-    // ::new (static_cast<void*>(std::addressof(value_)))
-    // T(std::forward<VALUE>(value));
-    value_ = std::forward<U>(value);
+    ::new (static_cast<void*>(std::addressof(value_)))
+        T(std::forward<U>(value));
     return_type_ = ReturnType::VALUE;
   }
 
@@ -221,8 +220,7 @@ class [[nodiscard]] Task {
 
   Task(promise_type* promise)
       : coroutine_(
-            std::coroutine_handle<promise_type>::from_promise(*promise)) {
-            }
+            std::coroutine_handle<promise_type>::from_promise(*promise)) {}
 
   Task(Task&& other) : coroutine_(other.coroutine_) {
     other.coroutine_ = nullptr;

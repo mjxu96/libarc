@@ -71,7 +71,7 @@ Task<void> TestEmptyCoro() {
     value += ii;
   }
   std::cout << value << std::endl;
-  // std::cout << co_await InternalTask(100000) << std::endl;
+  std::cout << co_await InternalTask(100000) << std::endl;
 
   std::cout << *(co_await TestMove(123)) << std::endl;
 

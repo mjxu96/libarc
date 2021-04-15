@@ -32,37 +32,30 @@
 #include <arc/coro/eventloop.h>
 #include <arc/coro/events/io_event_base.h>
 #include <arc/exception/io.h>
-// #include <arc/io/socket.h>
+
 #include <functional>
 
 namespace arc {
 namespace coro {
 
-template <net::Domain AF, net::Protocol P, io::IOType T>
+template <typename ReadyFunctorRetType, typename ResumeFunctorRetType,
+          io::IOType T>
 class IOAwaiter {
  public:
-  using StorageType = typename std::conditional_t<
-      T == io::IOType::READ, int,
-      typename std::conditional_t<
-          T == io::IOType::WRITE, const std::string*,
-          typename std::conditional_t<T == io::IOType::CONNECT,
-                                      const net::Address<AF>*, void*>>>;
-  
-  // using ResumeFuncRetType = typename std::conditional_t<
-
-  // TODO write buffer may be full so that *storage might be invalid when resuming
-  IOAwaiter(io::Socket<AF, P, io::Pattern::ASYNC>* sock, StorageType storage)
-      : sock_(sock), storage_(storage) {}
+  IOAwaiter(std::function<ReadyFunctorRetType()>&& ready_functor,
+            std::function<ResumeFunctorRetType()>&& resume_functor, int fd)
+      : ready_functor_(std::move(ready_functor)),
+        resume_functor_(std::move(resume_functor)),
+        fd_(fd) {}
 
   template <io::IOType UT = T>
   requires(UT == io::IOType::ACCEPT) bool await_ready() {
-    return dynamic_cast<io::Acceptor<AF, io::Pattern::ASYNC>*>(sock_)
-        ->HasCachedAvailableSocket();
+    return ready_functor_();
   }
 
   template <io::IOType UT = T>
   requires(UT == io::IOType::CONNECT) bool await_ready() {
-    if (sock_->InternalTryConnect(*storage_)) {
+    if (ready_functor_()) {
       return true;
     } else {
       if (errno == EINPROGRESS) {
@@ -70,12 +63,11 @@ class IOAwaiter {
       }
     }
     throw arc::exception::IOException("Connection Error");
-    return true;
   }
 
   template <io::IOType UT = T>
   requires(UT == io::IOType::WRITE) bool await_ready() {
-    written_size_ = sock_->InternalTrySend(*storage_);
+    written_size_ = ready_functor_();
     if (written_size_ < 0) {
       if (errno == EAGAIN || errno == EWOULDBLOCK) {
         return false;
@@ -93,38 +85,38 @@ class IOAwaiter {
   template <typename PromiseType>
   void await_suspend(std::coroutine_handle<PromiseType> handle) {
     GetLocalEventLoop().AddIOEvent(
-        new events::detail::IOEventBase(sock_->GetFd(), T, handle));
+        new events::detail::IOEventBase(fd_, T, handle));
   }
 
   template <io::IOType UT = T>
-  requires(UT == io::IOType::ACCEPT)
-      io::Socket<AF, P, io::Pattern::ASYNC> await_resume() {
-    return dynamic_cast<io::Acceptor<AF, io::Pattern::ASYNC>*>(sock_)
-        ->GetNextAvailableSocket();
+  requires(UT == io::IOType::ACCEPT) ResumeFunctorRetType await_resume() {
+    return resume_functor_();
   }
 
   template <io::IOType UT = T>
-  requires(UT == io::IOType::CONNECT) void await_resume() {
+  requires(UT == io::IOType::CONNECT) ResumeFunctorRetType await_resume() {
     return;
   }
 
   template <io::IOType UT = T>
-  requires(UT == io::IOType::READ) std::string await_resume() {
-    return sock_->InternalRecv(storage_);
+  requires(UT == io::IOType::READ) ResumeFunctorRetType await_resume() {
+    return resume_functor_();
   }
 
   template <io::IOType UT = T>
-  requires(UT == io::IOType::WRITE) int await_resume() {
-    if (written_size_ >= 0)
-      [[likely]] {
-        return written_size_;
-      } return sock_->InternalSend(*storage_);
+  requires(UT == io::IOType::WRITE) ResumeFunctorRetType await_resume() {
+    if (written_size_ >= 0) [[likely]] {
+      return written_size_;
+    }
+    return resume_functor_();
   }
 
  private:
-  StorageType storage_{nullptr};
-  io::Socket<AF, P, io::Pattern::ASYNC>* sock_{nullptr};
   int written_size_{0};
+  int fd_;
+
+  std::function<ResumeFunctorRetType()> resume_functor_;
+  std::function<ReadyFunctorRetType()> ready_functor_;
 };
 
 }  // namespace coro

@@ -1,7 +1,7 @@
 /*
- * File: io.cc
+ * File: tls_io_awaiter.h
  * Project: libarc
- * File Created: Wednesday, 14th April 2021 7:33:28 pm
+ * File Created: Wednesday, 14th April 2021 10:58:54 pm
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
@@ -26,40 +26,37 @@
  * IN THE SOFTWARE.
  */
 
-#include <arc/exception/io.h>
-#include <openssl/err.h>
+#ifndef LIBARC__CORO__AWAITER_TLS_IO_AWAITER_H
+#define LIBARC__CORO__AWAITER_TLS_IO_AWAITER_H
 
-#include <system_error>
+#include <arc/coro/eventloop.h>
+#include <arc/coro/events/io_event_base.h>
+#include <arc/io/utils.h>
 
-using namespace arc::exception;
-using namespace arc::exception::detail;
+namespace arc {
+namespace coro {
 
-#ifdef __clang__
-IOException::IOException(const std::string& msg) : ErrnoException(msg) {
-#else
-IOException::IOException(
-    const std::string& msg,
-    const std::experimental::source_location& source_location)
-    : ErrnoException(msg, source_location) {
-#endif
-}
+class TLSIOAwaiter {
+ public:
+  TLSIOAwaiter(int fd, arc::io::IOType next_op)
+      : fd_(fd), next_op_(next_op) {}
 
-#ifdef __clang__
-TLSException::TLSException(const std::string& msg) : ExceptionBase(msg) {
-#else
-TLSException::TLSException(
-    const std::string& msg,
-    const std::experimental::source_location& source_location)
-    : ExceptionBase(msg, source_location) {
-#endif
-  msg_ += GetSSLError();
-}
+  bool await_ready() { return false; }
 
-std::string TLSException::GetSSLError() {
-  int err = ERR_get_error();
-  if (err != 0) {
-    return " [" + std::to_string(err) + "] " +
-           std::string(ERR_reason_error_string(err));
+  template <typename PromiseType>
+  void await_suspend(std::coroutine_handle<PromiseType> handle) {
+    GetLocalEventLoop().AddIOEvent(
+        new events::detail::IOEventBase(fd_, next_op_, handle));
   }
-  return "";
-}
+
+  void await_resume() { return; }
+
+ private:
+  int fd_{-1};
+  arc::io::IOType next_op_{};
+};
+
+}  // namespace coro
+}  // namespace arc
+
+#endif
