@@ -49,7 +49,7 @@ concept PromiseT = requires (T t) {
 template <typename T>
 concept Movable = 
 #ifdef __clang__
-std::is_move_constructible_v<T>;
+(std::is_move_constructible_v<T> && std::is_move_assignable_v<T>);
 #else
 std::movable<T>;
 #endif

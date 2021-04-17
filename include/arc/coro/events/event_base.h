@@ -31,6 +31,14 @@
 
 #include <unistd.h>
 #include <cassert>
+#ifdef __clang__
+#include <experimental/coroutine>
+namespace std {
+  using experimental::coroutine_handle;
+}
+#else
+#include <coroutine>
+#endif
 
 namespace arc {
 namespace events {

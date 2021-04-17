@@ -38,21 +38,9 @@ EventLoop::EventLoop() {
   }
 }
 
-bool EventLoop::IsDone() {
-  return total_added_task_num_ <= 0 && coro_events_.empty() &&
-         finished_coro_events_.empty();
-}
+bool EventLoop::IsDone() { return total_added_task_num_ <= 0; }
 
 void EventLoop::Do() {
-  // First we iterate over unfinished coroutine event
-  auto finished_coro_events_itr = finished_coro_events_.begin();
-  while (finished_coro_events_itr != finished_coro_events_.end()) {
-    (*finished_coro_events_itr)->Resume();
-    delete (*finished_coro_events_itr);
-    finished_coro_events_itr =
-        finished_coro_events_.erase(finished_coro_events_itr);
-  }
-
   CleanUpFinishedCoroutines();
 
   if (total_added_task_num_ <= 0) {
@@ -104,16 +92,15 @@ void EventLoop::AddIOEvent(events::detail::IOEventBase* event) {
   int prev_events = GetExistIOEvent(target_fd);
   if ((prev_events & should_add_event) == 0) {
     if (target_fd < kMaxFdInArray_) {
-      assert(!io_events_[target_fd][static_cast<int>(event_type)]);
-      io_events_[target_fd][static_cast<int>(event_type)] = event;
+      io_events_[target_fd][static_cast<int>(event_type)].push_back(event);
     } else {
-      assert(extra_io_events_.find(target_fd) == extra_io_events_.end() ||
-             !extra_io_events_[target_fd][static_cast<int>(event_type)]);
       if (extra_io_events_.find(target_fd) == extra_io_events_.end()) {
         extra_io_events_[target_fd] =
-            std::vector<events::detail::IOEventBase*>{2, nullptr};
+            std::vector<std::deque<events::detail::IOEventBase*>>{
+                2, std::deque<events::detail::IOEventBase*>{}};
       }
-      extra_io_events_[target_fd][static_cast<int>(event_type)] = event;
+      extra_io_events_[target_fd][static_cast<int>(event_type)].push_back(
+          event);
     }
 
     int op = (prev_events == 0 ? EPOLL_CTL_ADD : EPOLL_CTL_MOD);
@@ -128,14 +115,10 @@ void EventLoop::AddIOEvent(events::detail::IOEventBase* event) {
   } else {
     // already added
     if (target_fd < kMaxFdInArray_) {
-      assert(event->GetIOType() == io::IOType::ACCEPT ||
-             io_events_[target_fd][static_cast<int>(event_type)] != event);
-      io_events_[target_fd][static_cast<int>(event_type)] = event;
+      io_events_[target_fd][static_cast<int>(event_type)].push_back(event);
     } else {
-      assert(event->GetIOType() == io::IOType::ACCEPT ||
-             extra_io_events_[target_fd][static_cast<int>(event_type)] !=
-                 event);
-      extra_io_events_[target_fd][static_cast<int>(event_type)] = event;
+      extra_io_events_[target_fd][static_cast<int>(event_type)].push_back(
+          event);
     }
     return;
   }
@@ -143,43 +126,30 @@ void EventLoop::AddIOEvent(events::detail::IOEventBase* event) {
 
 arc::events::detail::IOEventBase* EventLoop::GetEvent(
     int fd, events::detail::IOEventType event_type) {
+  arc::events::detail::IOEventBase* event = nullptr;
   if (fd < kMaxFdInArray_) {
-    return io_events_[fd][static_cast<int>(event_type)];
+    event = io_events_[fd][static_cast<int>(event_type)].front();
+  } else {
+    event = extra_io_events_[fd][static_cast<int>(event_type)].front();
   }
-  return extra_io_events_[fd][static_cast<int>(event_type)];
+  return event;
 }
 
-void EventLoop::RemoveIOEvent(int fd, io::IOType io_type, bool forced) {
-  events::detail::IOEventType event_type =
-      (io_type == io::IOType::READ || io_type == io::IOType::ACCEPT
-           ? events::detail::IOEventType::READ
-           : events::detail::IOEventType::WRITE);
-  events::detail::IOEventBase* event = GetEvent(fd, event_type);
-  RemoveIOEvent(event, forced);
-}
-
-void EventLoop::RemoveIOEvent(events::detail::IOEventBase* event, bool forced) {
-  if (!event->ShouldRemoveEveryTime() && !forced) {
-    return;
-  }
+void EventLoop::RemoveIOEvent(events::detail::IOEventBase* event) {
   int target_fd = event->GetFd();
   events::detail::IOEventType event_type = event->GetIOEventType();
 
   int after_io_events = 0;
   if (target_fd < kMaxFdInArray_) {
-    assert(io_events_[target_fd][static_cast<int>(event_type)]);
-    if (io_events_[target_fd][static_cast<int>(event_type)] == event) {
-      io_events_[target_fd][static_cast<int>(event_type)] = nullptr;
-    } else {
-      return;
-    }
+    assert(!io_events_[target_fd][static_cast<int>(event_type)].empty());
+    assert(io_events_[target_fd][static_cast<int>(event_type)].front() ==
+           event);
+    io_events_[target_fd][static_cast<int>(event_type)].pop_front();
   } else {
-    assert(extra_io_events_[target_fd][static_cast<int>(event_type)]);
-    if (extra_io_events_[target_fd][static_cast<int>(event_type)] == event) {
-      extra_io_events_[target_fd][static_cast<int>(event_type)] = nullptr;
-    } else {
-      return;
-    }
+    assert(!extra_io_events_[target_fd][static_cast<int>(event_type)].empty());
+    assert(extra_io_events_[target_fd][static_cast<int>(event_type)].front() ==
+           event);
+    extra_io_events_[target_fd][static_cast<int>(event_type)].pop_front();
   }
   after_io_events = GetExistIOEvent(target_fd);
 
@@ -198,62 +168,28 @@ void EventLoop::RemoveIOEvent(events::detail::IOEventBase* event, bool forced) {
   }
 }
 
-void EventLoop::AddCoroutine(events::CoroTaskEvent* event) {
-  event->SetCoroId(current_coro_id_);
-  assert(coro_events_.find(current_coro_id_) == coro_events_.end());
-  coro_events_[current_coro_id_] = event;
-  current_coro_id_++;
-}
-
-void EventLoop::FinishCoroutine(std::uint64_t coro_id) {
-  assert(coro_events_.find(coro_id) != coro_events_.end());
-  finished_coro_events_.push_back(coro_events_[coro_id]);
-  coro_events_.erase(coro_id);
-}
-
-void EventLoop::CleanUp() {
-  for (auto [id, event] : coro_events_) {
-    delete event;
-  }
-  for (auto event : finished_coro_events_) {
-    delete event;
-  }
-  for (auto& io_events : io_events_) {
-    for (auto& event : io_events) {
-      if (event) {
-        delete event;
-        event = nullptr;
-      }
-    }
-  }
-  for (auto& [fd, io_events] : extra_io_events_) {
-    for (auto& event : io_events) {
-      if (event) {
-        delete event;
-        event = nullptr;
-      }
-    }
-  }
-}
-
 int EventLoop::GetExistIOEvent(int fd) {
   int prev = 0;
   if (fd < kMaxFdInArray_) {
-    if (io_events_[fd][static_cast<int>(events::detail::IOEventType::READ)]) {
+    if (!io_events_[fd][static_cast<int>(events::detail::IOEventType::READ)]
+             .empty()) {
       prev |= EPOLLIN;
     }
-    if (io_events_[fd][static_cast<int>(events::detail::IOEventType::WRITE)]) {
+    if (!io_events_[fd][static_cast<int>(events::detail::IOEventType::WRITE)]
+             .empty()) {
       prev |= EPOLLOUT;
     }
   } else {
     if (extra_io_events_.find(fd) != extra_io_events_.end() &&
-        extra_io_events_[fd]
-                        [static_cast<int>(events::detail::IOEventType::READ)]) {
+        !extra_io_events_[fd]
+                         [static_cast<int>(events::detail::IOEventType::READ)]
+                             .empty()) {
       prev |= EPOLLIN;
     }
     if (extra_io_events_.find(fd) != extra_io_events_.end() &&
-        extra_io_events_[fd][static_cast<int>(
-            events::detail::IOEventType::WRITE)]) {
+        !extra_io_events_[fd]
+                         [static_cast<int>(events::detail::IOEventType::WRITE)]
+                             .empty()) {
       prev |= EPOLLOUT;
     }
   }
@@ -265,11 +201,10 @@ void EventLoop::AddToCleanUpCoroutine(std::coroutine_handle<> handle) {
 }
 
 void EventLoop::CleanUpFinishedCoroutines() {
-  auto to_clean_up_handles_itr = to_clean_up_handles_.begin();
-  while (to_clean_up_handles_itr != to_clean_up_handles_.end()) {
-    to_clean_up_handles_itr->destroy();
-    to_clean_up_handles_itr = to_clean_up_handles_.erase(to_clean_up_handles_itr);
+  for (auto& to_clean_up_handle : to_clean_up_handles_) {
+    to_clean_up_handle.destroy();
   }
+  to_clean_up_handles_.clear();
 }
 
 arc::coro::EventLoop& arc::coro::GetLocalEventLoop() {

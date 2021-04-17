@@ -34,6 +34,9 @@ using namespace arc::io;
 using namespace arc::net;
 using namespace arc::coro;
 
+const std::string request =
+    "GET / HTTP/1.1\r\nHost: www.google.com\r\nUser-Agent: "
+    "curl/7.58.0\r\nAccept: */*\r\n\r\n";
 const std::string ret =
     "HTTP/1.1 200 OK\r\nContent-Length: 140\r\nContent-Type: "
     "text/"
@@ -49,7 +52,8 @@ Task<void> HandleClient(
       if (recv.size() == 0) {
         break;
       }
-      co_await sock.Send(ret + recv);
+      std::string ret_in_stack = std::string(ret.c_str(), ret.size());
+      co_await sock.Send(ret_in_stack.c_str(), ret_in_stack.size());
     }
   } catch (const std::exception& e) {
     std::cerr << e.what() << '\n';
@@ -58,11 +62,12 @@ Task<void> HandleClient(
 
 Task<void> Listen() {
   Acceptor<Domain::IPV4, Pattern::ASYNC> accpetor;
+  std::cout << "acceptor fd: " << accpetor.GetFd() << std::endl;
   accpetor.SetOption(arc::net::SocketOption::REUSEADDR, 1);
   accpetor.SetOption(arc::net::SocketOption::REUSEPORT, 1);
   accpetor.Bind({"localhost", 8086});
   accpetor.Listen();
-  std::cout << "start accepting" << std::endl;
+  std::cout << "http listen starts" << std::endl;
   int i = 0;
   while (i < 2) {
     auto in_sock = co_await accpetor.Accept();
@@ -75,48 +80,65 @@ Task<void> Listen() {
 }
 
 Task<void> Connect() {
-  const std::string request =
-      "GET / HTTP/1.1\r\nHost: www.google.com\r\nUser-Agent: "
-      "curl/7.58.0\r\nAccept: */*\r\n\r\n";
   Socket<arc::net::Domain::IPV4, arc::net::Protocol::TCP,
          arc::io::Pattern::ASYNC>
       client;
   // co_await client.Connect({"ip6-localhost", 8080});
-  co_await client.Connect({"localhost", 8080});
+  std::cout << "start async http connect" << std::endl;
+  co_await client.Connect({"www.google.com", 80});
   std::cout << "before send" << std::endl;
-  co_await client.Send(request);
+  co_await client.Send(request.c_str(), request.size());
   std::cout << "after send" << std::endl;
   std::cout << co_await client.Recv() << std::endl;
   co_return;
 }
 
 Task<void> TLSConnect() {
-  const std::string request =
-      "GET / HTTP/1.1\r\nHost: www.baidu.com\r\nUser-Agent: "
-      "curl/7.58.0\r\nAccept: */*\r\n\r\n";
   TLSSocket<Domain::IPV4, Pattern::ASYNC> tls_socket;
-  co_await tls_socket.Connect({"www.baidu.com", 443});
+  std::cout << "start async https connect" << std::endl;
+  co_await tls_socket.Connect({"www.google.com", 443});
   std::cout << "before send" << std::endl;
-  co_await tls_socket.Send(request);
+  co_await tls_socket.Send(request.c_str(), request.size());
   std::cout << "after send" << std::endl;
   std::cout << co_await tls_socket.Recv() << std::endl;
   co_return;
 }
 
+Task<void> TLSAccept() {
+  TLSAcceptor<Domain::IPV4, Pattern::ASYNC> accpetor("/home/minjun/data/keys/server.pem", "/home/minjun/data/keys/server.pem");
+  std::cout << "acceptor fd: " << accpetor.GetFd() << std::endl;
+  accpetor.SetOption(arc::net::SocketOption::REUSEADDR, 1);
+  accpetor.SetOption(arc::net::SocketOption::REUSEPORT, 1);
+  accpetor.Bind({"localhost", 8086});
+  accpetor.Listen();
+  std::cout << "https listen starts" << std::endl;
+  int i = 0;
+  while (i < 2) {
+    auto in_sock = co_await accpetor.Accept();
+    std::cout << co_await in_sock.Recv() << std::endl;
+    std::cout << co_await in_sock.Send(ret.c_str(), ret.size()) << std::endl;
+    i++;
+    co_await in_sock.Shutdown();
+  }
+}
+
 void Start() { StartEventLoop(Listen()); }
 
 int main(int argc, char** argv) {
-  // StartEventLoop(Connect());
-  // std::vector<std::thread> threads;
-  // int thread_num = std::stoi(std::string(argv[1]));
-  // for (int i = 0; i < thread_num; i++) {
-  //   threads.emplace_back(Start);
-  // }
+  StartEventLoop(Connect());
+  std::vector<std::thread> threads;
+  int thread_num = std::stoi(std::string(argv[1]));
+  for (int i = 0; i < thread_num; i++) {
+    threads.emplace_back(Start);
+  }
 
-  // for (int i = 0; i < thread_num; i++) {
-  //   threads[i].join();
-  // }
+  for (int i = 0; i < thread_num; i++) {
+    threads[i].join();
+  }
 
-  // std::cout << "finished" << std::endl;
+  std::cout << "finished" << std::endl;
+  StartEventLoop(TLSAccept());
   StartEventLoop(TLSConnect());
+  // StartEventLoop(Listen());
+  // StartEventLoop(Connect());
 }

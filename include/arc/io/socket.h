@@ -29,6 +29,7 @@
 #ifndef LIBARC__IO__SOCKET_H
 #define LIBARC__IO__SOCKET_H
 
+#include <arc/concept/io.h>
 #include <arc/coro/awaiter/io_awaiter.h>
 #include <arc/coro/awaiter/tls_io_awaiter.h>
 #include <arc/coro/eventloop.h>
@@ -38,7 +39,6 @@
 #include <arc/io/ssl.h>
 #include <arc/io/utils.h>
 #include <arc/net/address.h>
-#include <arc/utils/exception.h>
 #include <fcntl.h>
 #include <netdb.h>
 #include <sys/socket.h>
@@ -144,8 +144,8 @@ class SocketBase : public IOBase {
   bool is_bound_{false};
 
   template <net::Domain UAF>
-  int InternalSendTo(const std::string& data, const net::Address<UAF>* addr) {
-    int sent = sendto(this->fd_, data.c_str(), data.size(), 0,
+  int InternalSendTo(const void* data, int num, const net::Address<UAF>* addr) {
+    int sent = sendto(this->fd_, data, num, 0,
                       (addr ? addr->GetCStyleAddress() : nullptr),
                       (addr ? addr->AddressSize() : 0));
     if (sent < 0) {
@@ -155,9 +155,9 @@ class SocketBase : public IOBase {
   }
 
   template <net::Domain UAF>
-  int InternalTrySendTo(const std::string& data,
+  int InternalTrySendTo(const void* data, int num,
                         const net::Address<UAF>* addr) {
-    return sendto(this->fd_, data.c_str(), data.size(), 0,
+    return sendto(this->fd_, data, num, 0,
                   (addr ? addr->GetCStyleAddress() : nullptr),
                   (addr ? addr->AddressSize() : 0));
   }
@@ -269,19 +269,24 @@ class Socket : public detail::SocketBase<AF,
 
   virtual ~Socket() {}
 
-  template <net::Protocol UP = P, Pattern UPP = PP, typename DataType>
+  template <net::Protocol UP = P, Pattern UPP = PP>
       requires(UP == net::Protocol::TCP) &&
-      (UPP == Pattern::SYNC) int Send(DataType&& data) {
-    return InternalSend(data);
+      (UPP == Pattern::SYNC) int Send(const void* data, int num) {
+    return InternalSend(data, num);
   }
 
-  template <Pattern UP = PP, typename DataType>
+  template <net::Protocol UP = P, Pattern UPP = PP, concepts::Writable DataType>
+      requires(UP == net::Protocol::TCP) &&
+      (UPP == Pattern::SYNC) int Send(DataType&& data) {
+    return InternalSend(data.c_str(), data.size());
+  }
+
+  template <Pattern UP = PP>
   requires(UP == Pattern::ASYNC)
-      coro::IOAwaiter<int, int, io::IOType::WRITE> Send(DataType&& data) {
-    return {std::bind(&Socket<AF, P, PP>::InternalTrySend, this,
-                      std::forward<DataType>(data)),
-            std::bind(&Socket<AF, P, PP>::InternalSend, this,
-                      std::forward<DataType>(data)),
+      coro::IOAwaiter<int, int, io::IOType::WRITE> Send(const void* data,
+                                                        int num) {
+    return {std::bind(&Socket<AF, P, PP>::InternalTrySend<P>, this, data, num),
+            std::bind(&Socket<AF, P, PP>::InternalSend<P>, this, data, num),
             this->fd_};
   }
 
@@ -296,9 +301,10 @@ class Socket : public detail::SocketBase<AF,
       (UPP == Pattern::ASYNC)
           coro::IOAwaiter<void, std::string, io::IOType::READ> Recv(
               int max_recv_bytes = -1) {
-    return {std::bind(&Socket<AF, P, PP>::DoNothingVoid, this),
-            std::bind(&Socket<AF, P, PP>::InternalRecv, this, max_recv_bytes),
-            this->fd_};
+    return {
+        std::bind(&Socket<AF, P, PP>::DoNothingVoid<PP>, this),
+        std::bind(&Socket<AF, P, PP>::InternalRecv<P>, this, max_recv_bytes),
+        this->fd_};
   }
 
   template <net::Protocol UP = P, Pattern UPP = PP>
@@ -313,16 +319,17 @@ class Socket : public detail::SocketBase<AF,
           coro::IOAwaiter<bool, void, io::IOType::CONNECT> Connect(
               const net::Address<AF>& addr) {
     return {std::bind(&Socket<AF, P, PP>::InternalTryConnect, this, addr),
-            std::bind(&Socket<AF, P, PP>::DoNothingVoid, this), this->fd_};
+            std::bind(&Socket<AF, P, PP>::DoNothingVoid<PP>, this), this->fd_};
   }
 
   // UDP
+  // TODO add coroutine functions
 
   template <net::Protocol UP = P, Pattern UPP = PP>
       requires(UP == net::Protocol::UDP) &&
-      (UPP == Pattern::SYNC) int SendTo(const std::string& data,
+      (UPP == Pattern::SYNC) int SendTo(const void* data, int num,
                                         const net::Address<AF>& addr) {
-    return this->template InternalSendTo<AF>(data, &addr);
+    return this->template InternalSendTo<AF>(data, num, &addr);
   }
 
   template <net::Protocol UP = P, Pattern UPP = PP>
@@ -350,14 +357,15 @@ class Socket : public detail::SocketBase<AF,
   requires(UPP == Pattern::ASYNC) void DoNothingVoid() {}
 
   template <net::Protocol UP = P>
-  requires(UP == net::Protocol::TCP) int InternalSend(const std::string& data) {
-    return this->template InternalSendTo<AF>(data, nullptr);
+  requires(UP == net::Protocol::TCP) int InternalSend(const void* data,
+                                                      int num) {
+    return this->template InternalSendTo<AF>(data, num, nullptr);
   }
 
   template <net::Protocol UP = P>
-  requires(UP ==
-           net::Protocol::TCP) int InternalTrySend(const std::string& data) {
-    return this->template InternalTrySendTo<AF>(data, nullptr);
+  requires(UP == net::Protocol::TCP) int InternalTrySend(const void* data,
+                                                         int num) {
+    return this->template InternalTrySendTo<AF>(data, num, nullptr);
   }
 
   template <net::Protocol UP = P>
@@ -366,7 +374,7 @@ class Socket : public detail::SocketBase<AF,
     return this->template InternalRecvFrom<AF>(max_recv_bytes, nullptr);
   }
 
-  virtual void InternalConnect(const net::Address<AF>& addr) {
+  void InternalConnect(const net::Address<AF>& addr) {
     static_assert(P != net::Protocol::UDP);
     int res = connect(this->fd_, addr.GetCStyleAddress(), addr.AddressSize());
     if (res < 0) {
@@ -374,7 +382,7 @@ class Socket : public detail::SocketBase<AF,
     }
   }
 
-  virtual bool InternalTryConnect(const net::Address<AF>& addr) {
+  bool InternalTryConnect(const net::Address<AF>& addr) {
     static_assert(P != net::Protocol::UDP);
     return (connect(this->fd_, addr.GetCStyleAddress(), addr.AddressSize()) ==
             0);
@@ -389,8 +397,8 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
       : Socket<AF, net::Protocol::TCP, PP>(),
         protocol_(protocol),
         type_(type),
-        context_ptr_(&GetGlobalSSLContext(protocol, type)),
-        ssl_(context_ptr_->FetchSSL()) {
+        context_ptr_(&GetGlobalSSLContext(protocol, type)) {
+    ssl_ = context_ptr_->FetchSSL();
     BindFdWithSSL();
   }
 
@@ -399,8 +407,8 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
       : Socket<AF, net::Protocol::TCP, PP>(std::move(other)),
         protocol_(protocol),
         type_(type),
-        context_ptr_(&GetGlobalSSLContext(protocol, type)),
-        ssl_(context_ptr_->FetchSSL()) {
+        context_ptr_(&GetGlobalSSLContext(protocol, type)) {
+    ssl_ = context_ptr_->FetchSSL();
     BindFdWithSSL();
   }
 
@@ -415,8 +423,8 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
       : Socket<AF, net::Protocol::TCP, PP>(fd, in_addr),
         protocol_(protocol),
         type_(type),
-        context_ptr_(&GetGlobalSSLContext(protocol, type)),
-        ssl_(context_ptr_->FetchSSL()) {
+        context_ptr_(&GetGlobalSSLContext(protocol, type)) {
+    ssl_ = context_ptr_->FetchSSL();
     BindFdWithSSL();
   }
 
@@ -428,9 +436,11 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
         type_(other.type_),
         context_ptr_(other.context_ptr_),
         ssl_(other.ssl_) {
+    other.ssl_.ssl = nullptr;
     other.context_ptr_ = nullptr;
     BindFdWithSSL();
   }
+
   TLSSocket& operator=(TLSSocket&& other) {
     Socket<AF, net::Protocol::TCP, PP>::operator=(std::move(other));
     if (ssl_.ssl && context_ptr_) {
@@ -440,11 +450,11 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
     type_ = other.type_;
     context_ptr_ = other.context_ptr_;
     ssl_ = other.ssl_;
+    other.ssl_.ssl = nullptr;
     other.context_ptr_ = nullptr;
     BindFdWithSSL();
     return *this;
   }
-
 
   template <Pattern UPP = PP>
   requires(UPP == Pattern::SYNC) std::string Recv(int max_recv_bytes = -1) {
@@ -477,43 +487,56 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
       throw std::logic_error(
           "Async Recv of TLSSocket cannot specify the max_recv_bytes.");
     }
-    co_await coro::TLSIOAwaiter(this->fd_, arc::io::IOType::READ);
     int ret = -1;
+    bool is_data_read = false;
     std::string ret_str;
-    do {
+    while (true) {
       ret = SSL_read(ssl_.ssl, this->buffer_, RECV_BUFFER_SIZE);
-      if (ret < 0) {
+      if (ret <= 0) {
         int err = SSL_get_error(ssl_.ssl, ret);
         if (err == SSL_ERROR_WANT_READ) {
-          co_await coro::TLSIOAwaiter(this->fd_, arc::io::IOType::READ);
+          if (!is_data_read) {
+            co_await coro::TLSIOAwaiter(this->fd_, arc::io::IOType::READ);
+          } else {
+            break;
+          }
         } else if (err == SSL_ERROR_WANT_WRITE) {
           co_await coro::TLSIOAwaiter(this->fd_, arc::io::IOType::WRITE);
+        } else if (err == SSL_ERROR_ZERO_RETURN) {
+          // no data, we exit
+          break;
         } else {
           throw exception::TLSException("Read Error");
         }
       } else {
+        is_data_read = true;
         ret_str.append(this->buffer_, ret);
       }
-    } while (ret < 0);
+    }
     co_return ret_str;
   }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::SYNC) int Send(const std::string& data) {
-    int writtern_size = SSL_write(ssl_.ssl, data.c_str(), data.size());
+  requires(UPP == Pattern::SYNC) int Send(const void* data, int num) {
+    int writtern_size = SSL_write(ssl_.ssl, data, num);
     if (writtern_size < 0) {
       throw arc::exception::TLSException("Write Error");
     }
     return writtern_size;
   }
 
-  template <Pattern UPP = PP, typename DataType>
-  requires(UPP == Pattern::ASYNC) coro::Task<int> Send(DataType&& data) {
-    std::string data_store = std::forward<DataType>(data);
+  template <Pattern UPP = PP, concepts::Writable DataType>
+  requires(UPP == Pattern::SYNC) int Send(DataType&& data) {
+    return Send(data.c_str(), data.size());
+  }
+
+  template <Pattern UPP = PP>
+  requires(UPP == Pattern::ASYNC) coro::Task<int> Send(const void* data,
+                                                       int num) {
     co_await coro::TLSIOAwaiter(this->fd_, arc::io::IOType::WRITE);
     int ret = -1;
     do {
-      ret = SSL_write(ssl_.ssl, data_store.c_str(), data_store.size());
+      ret = SSL_write(ssl_.ssl, data, num);
       if (ret < 0) {
         int err = SSL_get_error(ssl_.ssl, ret);
         if (err == SSL_ERROR_WANT_READ) {
@@ -521,12 +544,19 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
         } else if (err == SSL_ERROR_WANT_WRITE) {
           co_await coro::TLSIOAwaiter(this->fd_, arc::io::IOType::WRITE);
         } else {
-          throw exception::TLSException("Read Error");
+          throw exception::TLSException("Write Error", err);
         }
       }
     } while (ret < 0);
     co_return ret;
   }
+
+  // template <Pattern UPP = PP, concepts::Writable DataType>
+  // requires(UPP == Pattern::ASYNC) coro::Task<int> Send(DataType&& data) {
+  //   std::shared_ptr<std::string> data_ptr =
+  //   std::make_shared<std::string>(std::forward<DataType>(data)); return
+  //   co_await Send(data_ptr->c_str(), data_ptr->size());
+  // }
 
   template <Pattern UPP = PP>
   requires(UPP == Pattern::SYNC) void Connect(const net::Address<AF>& addr) {
@@ -557,14 +587,64 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
     }
     co_return;
   }
-  void SetAcceptState() {
-    SSL_set_accept_state(ssl_.ssl);
+
+  template <Pattern UPP = PP>
+  requires(UPP == Pattern::SYNC) void Shutdown() {
+    if (!ssl_.ssl) {
+      return;
+    }
+    int ret = 0;
+    while (true) {
+      ret = SSL_shutdown(ssl_.ssl);
+      if (ret == 1) {
+        // successfully shutdown
+        break;
+      } else if (ret == 0) {
+        // not finished yet, call again
+        continue;
+      } else {
+        int ssl_err = SSL_get_error(ssl_.ssl, ret);
+        throw arc::exception::TLSException("Shutdown Error", ssl_err);
+      }
+    }
   }
 
+  template <Pattern UPP = PP>
+  requires(UPP == Pattern::ASYNC) coro::Task<void> Shutdown() {
+    if (!ssl_.ssl) {
+      co_return;
+    }
+    int ret = 0;
+    while (true) {
+      ret = SSL_shutdown(ssl_.ssl);
+      if (ret == 1) {
+        // successfully shutdown
+        break;
+      } else if (ret == 0) {
+        // not finished yet, call again
+        continue;
+      } else {
+        int err = SSL_get_error(ssl_.ssl, ret);
+        if (err == SSL_ERROR_WANT_WRITE) {
+          co_await arc::coro::TLSIOAwaiter(this->fd_, arc::io::IOType::WRITE);
+        } else if (err == SSL_ERROR_WANT_READ) {
+          co_await arc::coro::TLSIOAwaiter(this->fd_, arc::io::IOType::READ);
+        } else {
+          throw arc::exception::TLSException("Shutdown Error", err);
+        }
+      }
+    }
+    co_return;
+  }
+
+  void SetAcceptState() { SSL_set_accept_state(ssl_.ssl); }
+
+  io::SSL& GetSSLObject() { return ssl_; }
+
   int HandShake() { return SSL_do_handshake(ssl_.ssl); }
+
  protected:
   void BindFdWithSSL() { SSL_set_fd(ssl_.ssl, this->fd_); }
-
 
   io::SSLContext* context_ptr_{nullptr};
   io::SSL ssl_{};
@@ -581,14 +661,6 @@ class Acceptor : virtual public Socket<AF, net::Protocol::TCP, PP> {
   Acceptor& operator=(Acceptor&& other) {
     Socket<AF, net::Protocol::TCP, PP>::operator=(std::move(other));
     return *this;
-  }
-  ~Acceptor() {
-    if constexpr (PP == Pattern::ASYNC) {
-      if (is_listened_) {
-        arc::coro::GetLocalEventLoop().RemoveIOEvent(this->fd_,
-                                                     io::IOType::ACCEPT, true);
-      }
-    }
   }
 
   void Listen(int max_pending_connections = 1024) {
@@ -675,13 +747,17 @@ class TLSAcceptor : public TLSSocket<AF, PP>, public Acceptor<AF, PP> {
   TLSAcceptor(const std::string& cert_file, const std::string& key_file,
               TLSProtocol protocol = TLSProtocol::NOT_SPEC,
               TLSProtocolType type = TLSProtocolType::SERVER)
-      : TLSSocket<AF, PP>(protocol, type), Acceptor<AF, PP>(), cert_file_(cert_file), key_file_(key_file)  {
+      : TLSSocket<AF, PP>(protocol, type),
+        Acceptor<AF, PP>(),
+        cert_file_(cert_file),
+        key_file_(key_file) {
     LoadCertificateAndKey(cert_file_, key_file_);
   }
-  TLSAcceptor(TLSAcceptor&& other) :
-     TLSSocket<AF, PP>(std::move(other)),
+  TLSAcceptor(TLSAcceptor&& other)
+      : TLSSocket<AF, PP>(std::move(other)),
         Acceptor<AF, PP>(std::move(other)),
-    cert_file_(std::move(other.cert_file_)), key_file_(std::move(other.key_file_)) {
+        cert_file_(std::move(other.cert_file_)),
+        key_file_(std::move(other.key_file_)) {
     LoadCertificateAndKey(cert_file_, key_file_);
   }
   TLSAcceptor& operator=(TLSAcceptor&& other) {
@@ -695,7 +771,8 @@ class TLSAcceptor : public TLSSocket<AF, PP>, public Acceptor<AF, PP> {
 
   template <Pattern UPP = PP>
   requires(UPP == Pattern::SYNC) TLSSocket<AF, PP> Accept() {
-    TLSSocket<AF, PP> tls_socket(Acceptor<AF, PP>::InternalAccept(), this->protocol_, this->type_);
+    TLSSocket<AF, PP> tls_socket(Acceptor<AF, PP>::InternalAccept(),
+                                 this->protocol_, this->type_);
     tls_socket.SetAcceptState();
     if (tls_socket.HandShake() != 1) {
       throw arc::exception::TLSException("Accept Error");
@@ -703,12 +780,33 @@ class TLSAcceptor : public TLSSocket<AF, PP>, public Acceptor<AF, PP> {
     return tls_socket;
   }
 
+  template <Pattern UPP = PP>
+  requires(UPP == Pattern::ASYNC) coro::Task<TLSSocket<AF, PP>> Accept() {
+    TLSSocket<AF, PP> tls_socket(co_await Acceptor<AF, PP>::Accept(),
+                                 this->protocol_, this->type_);
+    tls_socket.SetAcceptState();
+    int r = 0;
+    co_await arc::coro::TLSIOAwaiter(tls_socket.GetFd(), arc::io::IOType::READ);
+    while ((r = tls_socket.HandShake()) != 1) {
+      int err = SSL_get_error(tls_socket.GetSSLObject().ssl, r);
+      if (err == SSL_ERROR_WANT_WRITE) {
+        co_await arc::coro::TLSIOAwaiter(tls_socket.GetFd(),
+                                         arc::io::IOType::WRITE);
+      } else if (err == SSL_ERROR_WANT_READ) {
+        co_await arc::coro::TLSIOAwaiter(tls_socket.GetFd(),
+                                         arc::io::IOType::READ);
+      } else {
+        throw arc::exception::TLSException("Accept Error", err);
+      }
+    }
+    co_return std::move(tls_socket);
+  }
+
  private:
   void LoadCertificateAndKey(const std::string& cert_file,
                              const std::string& key_file) {
     this->context_ptr_->SetCertificateAndKey(cert_file, key_file);
   }
-
 
   std::string cert_file_;
   std::string key_file_;

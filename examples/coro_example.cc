@@ -41,9 +41,8 @@ Task<int> InternalTask(int i) {
     throw std::logic_error(error.c_str());
   } else if (i == 0) {
     co_return i;
-  } else {
-    co_return co_await InternalTask(i - 1) + i;
   }
+  co_return co_await InternalTask(i - 1) + i;
   // assert(i > -1);
   // std::cout << i << std::endl;
   // co_return (i >= 0 ? i : i - 1);

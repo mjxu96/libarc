@@ -35,16 +35,6 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#ifdef __clang__
-#include <experimental/coroutine>
-namespace std {
-  using experimental::coroutine_handle;
-}
-#else
-#include <coroutine>
-#endif
-#include <iostream>
-
 namespace arc {
 namespace events {
 namespace detail {
@@ -57,9 +47,6 @@ class IOEventBase : public EventBase {
       : EventBase(handle), fd_(fd), io_type_(io_type) {
     if (io_type == io::IOType::READ || io_type == io::IOType::ACCEPT) {
       io_event_type_ = detail::IOEventType::READ;
-      if (io_type == io::IOType::ACCEPT) {
-        should_remove_everytime_ = false;
-      }
     } else {
       io_event_type_ = detail::IOEventType::WRITE;
     }
@@ -72,15 +59,11 @@ class IOEventBase : public EventBase {
     return io_event_type_;
   }
   inline io::IOType GetIOType() const noexcept { return io_type_; }
-  inline bool ShouldRemoveEveryTime() const noexcept {
-    return should_remove_everytime_;
-  }
 
  protected:
   int fd_{-1};
   io::IOType io_type_{};
   detail::IOEventType io_event_type_{};
-  bool should_remove_everytime_{true};
 };
 
 }  // namespace detail

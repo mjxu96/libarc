@@ -31,6 +31,7 @@
 
 #include <bitset>
 #include <type_traits>
+#include <cassert>
 
 namespace arc {
 namespace utils {
@@ -61,6 +62,17 @@ requires std::is_arithmetic_v<T> T GetLowerBits(T in_coming, int lower_bits) {
   assert(lower_bits <= sizeof(T) * 8u);
   T all_ones = ~(0);
   return (in_coming & (~(all_ones << lower_bits)));
+}
+
+template <typename T>
+requires std::is_arithmetic_v<T> std::string GetHexString(T value) {
+  size_t hex_len = sizeof(T) << 1;
+  static const char* digits = "0123456789ABCDEF";
+  std::string rc(hex_len, '0');
+  for (size_t i = 0, j = (hex_len - 1) * 4; i < hex_len; ++i, j -= 4) {
+    rc[i] = digits[(value >> j) & 0x0f];
+  }
+  return "0x" + rc;
 }
 
 }  // namespace utils

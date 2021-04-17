@@ -6,17 +6,17 @@
  * -----
  * MIT License
  * Copyright (c) 2020 Minjun Xu
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
  * deal in the Software without restriction, including without limitation the
  * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
  * sell copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -29,8 +29,11 @@
 #ifndef LIBARC__IO__SSL_H
 #define LIBARC__IO__SSL_H
 
-#include <openssl/ssl.h>
+#include <openssl/bio.h>
+#include <openssl/bioerr.h>
 #include <openssl/err.h>
+#include <openssl/ssl.h>
+
 #include <string>
 
 namespace arc {
@@ -66,9 +69,12 @@ class SSLContext {
   SSLContext(SSLContext&&);
   SSLContext& operator=(SSLContext&&);
   ~SSLContext();
-  void SetCertificateAndKey(const std::string& cert_file, const std::string& key_file);
+  void SetCertificateAndKey(const std::string& cert_file,
+                            const std::string& key_file);
+  void SetDebugMode(bool debug = true);
   SSL FetchSSL();
   void FreeSSL(SSL& ssl);
+
  private:
   TLSProtocol protocol_;
   TLSProtocolType type_;
@@ -78,9 +84,8 @@ class SSLContext {
 };
 
 SSLContext& GetGlobalSSLContext(TLSProtocol protocol, TLSProtocolType type);
-  
-} // namespace io
-} // namespace arc
 
+}  // namespace io
+}  // namespace arc
 
 #endif

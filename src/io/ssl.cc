@@ -6,17 +6,17 @@
  * -----
  * MIT License
  * Copyright (c) 2020 Minjun Xu
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
  * deal in the Software without restriction, including without limitation the
  * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
  * sell copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -26,16 +26,45 @@
  * IN THE SOFTWARE.
  */
 
-#include <arc/io/ssl.h>
-#include <arc/utils/nameof.hpp>
 #include <arc/exception/io.h>
+#include <arc/io/ssl.h>
+
+#include <arc/utils/nameof.hpp>
 #include <string>
 #include <unordered_map>
 
+void SSLInfoCallback(const ::SSL* s, int where, int ret) {
+  const char* str;
+  int w;
+
+  w = where & ~SSL_ST_MASK;
+
+  if (w & SSL_ST_CONNECT)
+    str = "SSL_connect";
+  else if (w & SSL_ST_ACCEPT)
+    str = "SSL_accept";
+  else
+    str = "undefined";
+
+  if (where & SSL_CB_LOOP) {
+    printf("%s:%s\n", str, SSL_state_string_long(s));
+  } else if (where & SSL_CB_ALERT) {
+    str = (where & SSL_CB_READ) ? "read" : "write";
+    printf("SSL3 alert %s:%s:%s\n", str, SSL_alert_type_string_long(ret),
+           SSL_alert_desc_string_long(ret));
+  } else if (where & SSL_CB_EXIT) {
+    if (ret == 0)
+      printf("%s:failed in %s\n", str, SSL_state_string_long(s));
+    else if (ret < 0) {
+      printf("%s:error in %s\n", str, SSL_state_string_long(s));
+    }
+  }
+}
+
 using namespace arc::io;
 
-SSLContext::SSLContext(TLSProtocol protocol, TLSProtocolType type) : 
-  protocol_(protocol), type_(type) {
+SSLContext::SSLContext(TLSProtocol protocol, TLSProtocolType type)
+    : protocol_(protocol), type_(type) {
   const SSL_METHOD* method = nullptr;
   OpenSSL_add_all_algorithms();
   SSL_load_error_strings();
@@ -46,28 +75,6 @@ SSLContext::SSLContext(TLSProtocol protocol, TLSProtocolType type) :
   } else {
     method = TLS_server_method();
   }
-  // if (protocol_ == TLSProtocol::TLSv1) {
-  //   if (type_ == TLSProtocolType::CLIENT) {
-  //     method = TLSv1_client_method();
-  //   } else {
-  //     method = TLSv1_server_method();
-  //   }
-  // } else if (protocol_ == TLSProtocol::TLSv1_1) {
-  //   if (type_ == TLSProtocolType::CLIENT) {
-  //     method = TLSv1_1_client_method();
-  //   } else {
-  //     method = TLSv1_1_server_method();
-  //   }
-  // } else if (protocol_ == TLSProtocol::TLSv1_2) {
-  //   if (type_ == TLSProtocolType::CLIENT) {
-  //     method = TLSv1_2_client_method();
-  //   } else {
-  //     method = TLSv1_2_server_method();
-  //   }
-  // } else {
-  //   std::string error = std::string(nameof::nameof_enum(protocol)) + std::string(" is not accepted");
-  //   throw std::logic_error(error);
-  // }
   context_ = SSL_CTX_new(method);
   if (!context_) {
     throw arc::exception::TLSException("SSL Context Creation Error");
@@ -94,15 +101,26 @@ SSLContext& SSLContext::operator=(SSLContext&& other) {
   return *this;
 }
 
-void SSLContext::SetCertificateAndKey(const std::string& cert_file, const std::string& key_file) {
-  if (SSL_CTX_use_certificate_file(context_, cert_file.c_str(), SSL_FILETYPE_PEM) != 1) {
+void SSLContext::SetCertificateAndKey(const std::string& cert_file,
+                                      const std::string& key_file) {
+  if (SSL_CTX_use_certificate_file(context_, cert_file.c_str(),
+                                   SSL_FILETYPE_PEM) != 1) {
     throw arc::exception::TLSException("Load Cert Failure");
   }
-  if (SSL_CTX_use_PrivateKey_file(context_, key_file.c_str(), SSL_FILETYPE_PEM) != 1) {
+  if (SSL_CTX_use_PrivateKey_file(context_, key_file.c_str(),
+                                  SSL_FILETYPE_PEM) != 1) {
     throw arc::exception::TLSException("Load PKey Failure");
   }
   if (SSL_CTX_check_private_key(context_) != 1) {
     throw arc::exception::TLSException("Check PKey Failure");
+  }
+}
+
+void SSLContext::SetDebugMode(bool debug) {
+  if (debug) {
+    SSL_CTX_set_info_callback(context_, SSLInfoCallback);
+  } else {
+    SSL_CTX_set_info_callback(context_, nullptr);
   }
 }
 
@@ -114,18 +132,20 @@ arc::io::SSL SSLContext::FetchSSL() {
   return {new_ssl};
 }
 
-void SSLContext::FreeSSL(SSL& ssl) {
-  SSL_free(ssl.ssl);
-}
+void SSLContext::FreeSSL(SSL& ssl) { SSL_free(ssl.ssl); }
 
 std::string SSLContext::GetSSLError() {
   return std::string(ERR_reason_error_string(ERR_get_error()));
 }
 
-SSLContext& arc::io::GetGlobalSSLContext(TLSProtocol protocol, TLSProtocolType type) {
-  static std::unordered_map<TLSProtocol, std::unordered_map<TLSProtocolType, SSLContext>> global_contexts;
+SSLContext& arc::io::GetGlobalSSLContext(TLSProtocol protocol,
+                                         TLSProtocolType type) {
+  static std::unordered_map<TLSProtocol,
+                            std::unordered_map<TLSProtocolType, SSLContext>>
+      global_contexts;
   if (global_contexts.find(protocol) == global_contexts.end()) {
-    global_contexts[protocol] = std::unordered_map<TLSProtocolType, SSLContext>();
+    global_contexts[protocol] =
+        std::unordered_map<TLSProtocolType, SSLContext>();
   }
   if (global_contexts[protocol].find(type) == global_contexts[protocol].end()) {
     global_contexts[protocol][type] = SSLContext(protocol, type);

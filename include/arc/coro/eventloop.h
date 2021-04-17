@@ -29,18 +29,16 @@
 #ifndef LIBARC__CORO__EVENTLOOP_H
 #define LIBARC__CORO__EVENTLOOP_H
 
-#include <arc/coro/events/coro_task_event.h>
 #include <arc/coro/events/io_event_base.h>
 #include <arc/io/io_base.h>
 #include <arc/utils/bits.h>
-#include <arc/utils/exception.h>
 #include <assert.h>
 #include <sys/epoll.h>
 
 #ifdef __clang__
 #include <experimental/coroutine>
 namespace std {
-  using experimental::coroutine_handle;
+using experimental::coroutine_handle;
 }
 #else
 #include <coroutine>
@@ -62,11 +60,7 @@ class EventLoop : public io::detail::IOBase {
   bool IsDone();
   void Do();
   void AddIOEvent(events::detail::IOEventBase* event);
-  void RemoveIOEvent(int fd, io::IOType io_type, bool forced = false);
-  void RemoveIOEvent(events::detail::IOEventBase* event, bool forced = false);
-
-  void AddCoroutine(events::CoroTaskEvent* event);
-  void FinishCoroutine(std::uint64_t coro_id);
+  void RemoveIOEvent(events::detail::IOEventBase* event);
 
   void AddToCleanUpCoroutine(std::coroutine_handle<> handle);
 
@@ -79,17 +73,18 @@ class EventLoop : public io::detail::IOBase {
 
   int total_added_task_num_{0};
 
-  // fd -> {io_type : events}
-  std::vector<std::vector<events::detail::IOEventBase*>> io_events_{
-      kMaxFdInArray_, std::vector<events::detail::IOEventBase*>{2, nullptr}};
+  // {fd -> {io_type -> [events]}}
+  std::vector<std::vector<std::deque<events::detail::IOEventBase*>>> io_events_{
+      kMaxFdInArray_, std::vector<std::deque<events::detail::IOEventBase*>>{
+                          2, std::deque<events::detail::IOEventBase*>{}}};
 
-  std::unordered_map<int, std::vector<events::detail::IOEventBase*>>
+  std::unordered_map<int, std::vector<std::deque<events::detail::IOEventBase*>>>
       extra_io_events_{};
 
-  std::unordered_map<std::uint64_t, events::CoroTaskEvent*> coro_events_;
-  std::list<events::CoroTaskEvent*> finished_coro_events_;
+  // std::unordered_map<std::uint64_t, events::CoroTaskEvent*> coro_events_;
+  // std::list<events::CoroTaskEvent*> finished_coro_events_;
 
-  std::uint64_t current_coro_id_{0};
+  // std::uint64_t current_coro_id_{0};
 
   // epoll related
   epoll_event events[kMaxEventsSizePerWait_];
@@ -99,11 +94,8 @@ class EventLoop : public io::detail::IOBase {
   int GetExistIOEvent(int fd);
   events::detail::IOEventBase* GetEvent(int fd,
                                         events::detail::IOEventType event_type);
-  // int IsFdExistInOtherTypeTodoEvents(int fd, io::IOType exclude_event);
-  // int GetEpollFlagFromIOType(io::IOType type);
-  // std::pair<int, io::IOType> GetFdAndIOTypeFromEpollEvent(uint64_t u);
 
-  std::list<std::coroutine_handle<>> to_clean_up_handles_{};
+  std::vector<std::coroutine_handle<>> to_clean_up_handles_{};
 };
 
 EventLoop& GetLocalEventLoop();

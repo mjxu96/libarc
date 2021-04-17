@@ -32,7 +32,6 @@
 // TODO add support for clang
 #include <arc/concept/coro.h>
 #include <arc/coro/eventloop.h>
-#include <arc/coro/events/coro_task_event.h>
 #include <unistd.h>
 
 #ifdef __clang__
@@ -137,6 +136,7 @@ class TaskPromise : public PromiseBase {
       GetLocalEventLoop().AddToCleanUpCoroutine(
           std::coroutine_handle<TaskPromise<T>>::from_promise(*this));
     }
+    // new placement to initialize the value_ in union
     ::new (static_cast<void*>(std::addressof(value_)))
         T(std::forward<U>(value));
     return_type_ = ReturnType::VALUE;

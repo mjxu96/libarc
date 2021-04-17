@@ -1,7 +1,7 @@
 /*
- * File: coro_task_event.h
+ * File: io.h
  * Project: libarc
- * File Created: Monday, 7th December 2020 10:28:33 pm
+ * File Created: Saturday, 17th April 2021 9:53:29 am
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
@@ -26,43 +26,19 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef LIBARC__CORO__EVENTS__CORO_TASK_EVENT_H
-#define LIBARC__CORO__EVENTS__CORO_TASK_EVENT_H
+#ifndef LIBARC__CONCEPT__IO_H
+#define LIBARC__CONCEPT__IO_H
 
-#include <sys/eventfd.h>
-
-#ifdef __clang__
-#include <experimental/coroutine>
-namespace std {
-  using experimental::coroutine_handle;
-}
-#else
-#include <coroutine>
-#endif
-#include <cstdint>
-
-#include "event_base.h"
+#include <concepts>
+#include <type_traits>
+#include <string>
 
 namespace arc {
-namespace events {
+namespace concepts {
 
-class CoroTaskEvent : public detail::EventBase {
- public:
-  CoroTaskEvent() : detail::EventBase(nullptr) {}
-  CoroTaskEvent(std::coroutine_handle<> handle) : detail::EventBase(handle) {}
-  ~CoroTaskEvent() = default;
-
-  inline void SetCoroId(std::uint64_t id) noexcept { id_ = id; }
-
-  inline std::uint64_t GetCoroId() const noexcept { return id_; }
-
-  void SetCoroutineHandle(std::coroutine_handle<> handle) { handle_ = handle; }
-
- private:
-  std::uint64_t id_{0};
-};
-
-}  // namespace events
+template <typename T>
+concept Writable = (std::is_convertible_v<T, std::string>) || (std::is_convertible_v<T, std::wstring>);
+}  // namespace concept
 }  // namespace arc
 
-#endif /* LIBARC__CORO__EVENTS__CORO_TASK_EVENT_H */
+#endif

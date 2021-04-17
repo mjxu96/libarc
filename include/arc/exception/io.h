@@ -30,6 +30,7 @@
 #define LIBARC__EXCEPTION__IO_H
 
 #include "base.h"
+#include <openssl/ssl.h>
 
 namespace arc {
 namespace exception {
@@ -48,13 +49,14 @@ class IOException : public detail::ErrnoException {
 class TLSException : public detail::ExceptionBase {
  public:
 #ifdef __clang__
-  TLSException(const std::string& msg = "");
+  TLSException(const std::string& msg = "", int ssl_err = SSL_ERROR_SSL);
 #else
-  TLSException(const std::string& msg = "",
+  TLSException(const std::string& msg = "", int ssl_err = SSL_ERROR_SSL,
                const std::experimental::source_location& source_location =
                    std::experimental::source_location::current());
 #endif
  private:
+  int ssl_err_{0};
   std::string GetSSLError();
 };
 

@@ -27,6 +27,7 @@
  */
 
 #include <arc/exception/io.h>
+#include <arc/utils/bits.h>
 #include <openssl/err.h>
 
 #include <system_error>
@@ -45,21 +46,40 @@ IOException::IOException(
 }
 
 #ifdef __clang__
-TLSException::TLSException(const std::string& msg) : ExceptionBase(msg) {
+TLSException::TLSException(const std::string& msg, int ssl_err)
+    : ExceptionBase(msg), ssl_err_(ssl_err) {
 #else
 TLSException::TLSException(
-    const std::string& msg,
+    const std::string& msg, int ssl_err,
     const std::experimental::source_location& source_location)
-    : ExceptionBase(msg, source_location) {
+    : ExceptionBase(msg, source_location), ssl_err_(ssl_err) {
 #endif
   msg_ += GetSSLError();
 }
 
 std::string TLSException::GetSSLError() {
-  int err = ERR_get_error();
-  if (err != 0) {
-    return " [" + std::to_string(err) + "] " +
-           std::string(ERR_reason_error_string(err));
+  if (ssl_err_ == SSL_ERROR_SSL || ssl_err_ == SSL_ERROR_SYSCALL) {
+    int err = 0;
+    std::string err_str;
+    bool is_first_get_error = true;
+    while (true) {
+      err = ERR_get_error();
+      if (err == 0) {
+        if (is_first_get_error) {
+          err_str =
+              std::error_code(errno, std::generic_category()).message();
+          std::string err_code = " [" + arc::utils::GetHexString(errno) + "] ";
+          err_str = err_code + err_str;
+        }
+        break;
+      } else {
+        is_first_get_error = false;
+        err_str += " [" + arc::utils::GetHexString(err) + "] " +
+                  std::string(ERR_reason_error_string(err));
+      }
+    }
+    return err_str;
+  } else {
+    return " [SSL_get_error() " + arc::utils::GetHexString(ssl_err_) + "]";
   }
-  return "";
 }

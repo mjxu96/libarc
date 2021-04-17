@@ -13,7 +13,7 @@ matrix:
             - gcc-10
             - g++-10
       env:
-        - MATRIX_EVAL="export CC=gcc-10 && export CXX=g++-10"
+        - MATRIX_EVAL="export CC=gcc-10 && export CXX=g++-10 && export GTEST_CMAKE_FLAGS=\"-std=c++11\""
 
     - os: linux
       dist: bionic
@@ -31,7 +31,7 @@ matrix:
             - libc++-11-dev
             - libc++abi-11-dev
       env:
-        - MATRIX_EVAL="export CC=clang-11 && export CXX=clang++-11"
+        - MATRIX_EVAL="export CC=clang-11 && export CXX=clang++-11 && export GTEST_CMAKE_FLAGS=\"-std=c++11 -stdlib=libc++ -U__STRICT_ANSI__\""
 
     # NOT SUPPORTED NOW
     # - os: osx
@@ -47,7 +47,7 @@ install:
   - sudo apt install -y make libgtest-dev
 
   # install googletest
-  - pushd /usr/src/gtest && sudo cmake CMakeLists.txt && sudo make && sudo make install && popd
+  - pushd /usr/src/gtest && sudo cmake -DCMAKE_CXX_FLAGS="${GTEST_CMAKE_FLAGS}" CMakeLists.txt && sudo make && sudo make install && popd
   - sudo ldconfig
 
 script:
