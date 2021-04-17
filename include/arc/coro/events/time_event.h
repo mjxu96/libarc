@@ -32,6 +32,7 @@
 #include <arc/coro/eventloop.h>
 #include <arc/exception/io.h>
 #include <arc/io/io_base.h>
+#include <fcntl.h>
 #include <sys/timerfd.h>
 
 #include <chrono>
@@ -49,8 +50,7 @@ namespace detail {
 class TimerEvent : public IOEventBase {
  public:
   TimerEvent(int fd, std::coroutine_handle<void> handle)
-      : IOEventBase(fd, io::IOType::READ,
-                    handle) {}
+      : IOEventBase(fd, io::IOType::READ, handle) {}
   virtual ~TimerEvent() {}
 };
 
@@ -59,6 +59,14 @@ class AsyncTimerController : public io::detail::IOBase {
   AsyncTimerController() : io::detail::IOBase() {
     fd_ = timerfd_create(CLOCK_MONOTONIC, 0);
     if (fd_ < 0) {
+      throw arc::exception::IOException("Creating Local Timer Error");
+    }
+    int flags = fcntl(fd_, F_GETFL);
+    if (flags < 0) {
+      throw arc::exception::IOException("Creating Local Timer Error");
+    }
+    flags = fcntl(fd_, F_SETFL, flags | O_NONBLOCK);
+    if (flags < 0) {
       throw arc::exception::IOException("Creating Local Timer Error");
     }
   }

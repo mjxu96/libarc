@@ -16,6 +16,8 @@ option(ARC_BUILD_TESTS "whehter build tests" OFF)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} ${CXX_COROUTINE_COMPILE_FLAGS}")
 
+set(LIBARC_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+
 add_subdirectory("cmake")
 
 install (

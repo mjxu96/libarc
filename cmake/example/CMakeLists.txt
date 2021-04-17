@@ -1,5 +1,5 @@
 
-file(GLOB libarc_example_files ${CMAKE_SOURCE_DIR}/examples/*.cc)
+file(GLOB libarc_example_files ${LIBARC_SOURCE_DIR}/examples/*.cc)
 
 foreach(libarc_example_file ${libarc_example_files})
   get_filename_component(example_name ${libarc_example_file} NAME_WE)
