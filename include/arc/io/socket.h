@@ -397,7 +397,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
       : Socket<AF, net::Protocol::TCP, PP>(),
         protocol_(protocol),
         type_(type),
-        context_ptr_(&GetGlobalSSLContext(protocol, type)) {
+        context_ptr_(&GetLocalSSLContext(protocol, type)) {
     ssl_ = context_ptr_->FetchSSL();
     BindFdWithSSL();
   }
@@ -407,7 +407,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
       : Socket<AF, net::Protocol::TCP, PP>(std::move(other)),
         protocol_(protocol),
         type_(type),
-        context_ptr_(&GetGlobalSSLContext(protocol, type)) {
+        context_ptr_(&GetLocalSSLContext(protocol, type)) {
     ssl_ = context_ptr_->FetchSSL();
     BindFdWithSSL();
   }
@@ -423,7 +423,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
       : Socket<AF, net::Protocol::TCP, PP>(fd, in_addr),
         protocol_(protocol),
         type_(type),
-        context_ptr_(&GetGlobalSSLContext(protocol, type)) {
+        context_ptr_(&GetLocalSSLContext(protocol, type)) {
     ssl_ = context_ptr_->FetchSSL();
     BindFdWithSSL();
   }
@@ -504,6 +504,8 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
           co_await coro::TLSIOAwaiter(this->fd_, arc::io::IOType::WRITE);
         } else if (err == SSL_ERROR_ZERO_RETURN) {
           // no data, we exit
+          break;
+        } else if (err == SSL_ERROR_SYSCALL && errno == 0) {
           break;
         } else {
           throw exception::TLSException("Read Error");
@@ -629,6 +631,8 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
           co_await arc::coro::TLSIOAwaiter(this->fd_, arc::io::IOType::WRITE);
         } else if (err == SSL_ERROR_WANT_READ) {
           co_await arc::coro::TLSIOAwaiter(this->fd_, arc::io::IOType::READ);
+        } else if (err == SSL_ERROR_SYSCALL && errno == 0) {
+          break;
         } else {
           throw arc::exception::TLSException("Shutdown Error", err);
         }
@@ -795,6 +799,8 @@ class TLSAcceptor : public TLSSocket<AF, PP>, public Acceptor<AF, PP> {
       } else if (err == SSL_ERROR_WANT_READ) {
         co_await arc::coro::TLSIOAwaiter(tls_socket.GetFd(),
                                          arc::io::IOType::READ);
+      } else if (err == SSL_ERROR_SYSCALL && errno == 0) {
+        break;
       } else {
         throw arc::exception::TLSException("Accept Error", err);
       }

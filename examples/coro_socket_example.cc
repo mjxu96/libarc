@@ -60,6 +60,22 @@ Task<void> HandleClient(
   }
 }
 
+Task<void> HandleClient(
+    TLSSocket<Domain::IPV4, Pattern::ASYNC> sock) {
+  try {
+    while (true) {
+      auto recv = co_await sock.Recv();
+      if (recv.size() == 0) {
+        break;
+      }
+      co_await sock.Send(ret.c_str(), ret.size());
+    }
+    // co_await sock.Shutdown();
+  } catch (const std::exception& e) {
+    std::cerr << e.what() << '\n';
+  }
+}
+
 Task<void> Listen() {
   Acceptor<Domain::IPV4, Pattern::ASYNC> accpetor;
   std::cout << "acceptor fd: " << accpetor.GetFd() << std::endl;
@@ -115,21 +131,25 @@ Task<void> TLSAccept() {
   int i = 0;
   while (i < 2) {
     auto in_sock = co_await accpetor.Accept();
-    std::cout << co_await in_sock.Recv() << std::endl;
-    std::cout << co_await in_sock.Send(ret.c_str(), ret.size()) << std::endl;
-    i++;
-    co_await in_sock.Shutdown();
+    EnsureFuture(HandleClient(std::move(in_sock)));
+    // i++;
+    // std::cout << co_await in_sock.Recv() << std::endl;
+    // std::cout << co_await in_sock.Send(ret.c_str(), ret.size()) << std::endl;
+    // i++;
+    // co_await in_sock.Shutdown();
   }
 }
 
 void Start() { StartEventLoop(Listen()); }
 
+void TLSStart() { StartEventLoop(TLSAccept()); }
+
 int main(int argc, char** argv) {
-  StartEventLoop(Connect());
+  // StartEventLoop(Connect());
   std::vector<std::thread> threads;
   int thread_num = std::stoi(std::string(argv[1]));
   for (int i = 0; i < thread_num; i++) {
-    threads.emplace_back(Start);
+    threads.emplace_back(TLSStart);
   }
 
   for (int i = 0; i < thread_num; i++) {
@@ -137,8 +157,8 @@ int main(int argc, char** argv) {
   }
 
   std::cout << "finished" << std::endl;
-  StartEventLoop(TLSAccept());
-  StartEventLoop(TLSConnect());
+  // StartEventLoop(TLSAccept());
+  // StartEventLoop(TLSConnect());
   // StartEventLoop(Listen());
   // StartEventLoop(Connect());
 }

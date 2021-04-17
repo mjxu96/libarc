@@ -83,7 +83,7 @@ class SSLContext {
   std::string GetSSLError();
 };
 
-SSLContext& GetGlobalSSLContext(TLSProtocol protocol, TLSProtocolType type);
+SSLContext& GetLocalSSLContext(TLSProtocol protocol, TLSProtocolType type);
 
 }  // namespace io
 }  // namespace arc
