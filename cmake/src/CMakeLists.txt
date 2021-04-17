@@ -6,6 +6,7 @@ find_package(OpenSSL)
 
 set(ARC_CORO_FILES
   ${CMAKE_SOURCE_DIR}/src/coro/eventloop.cc
+  ${CMAKE_SOURCE_DIR}/src/coro/events/time_event.cc
   ${CMAKE_SOURCE_DIR}/src/coro/task.cc
 )
 

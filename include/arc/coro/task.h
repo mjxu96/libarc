@@ -32,6 +32,7 @@
 // TODO add support for clang
 #include <arc/concept/coro.h>
 #include <arc/coro/eventloop.h>
+#include <arc/coro/awaiter/time_awaiter.h>
 #include <unistd.h>
 
 #ifdef __clang__
@@ -273,6 +274,8 @@ void EnsureFuture(Task<void>&& task);
 void RunUntilComplelete();
 
 void StartEventLoop(Task<void>&& task);
+
+TimeAwaiter SleepFor(const std::chrono::system_clock::duration& duration);
 
 }  // namespace coro
 }  // namespace arc

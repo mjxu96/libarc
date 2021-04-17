@@ -32,6 +32,7 @@
 #include <arc/coro/eventloop.h>
 #include <arc/coro/events/io_event_base.h>
 #include <arc/exception/io.h>
+#include <arc/concept/coro.h>
 
 #include <functional>
 
@@ -40,7 +41,7 @@ namespace coro {
 
 template <typename ReadyFunctorRetType, typename ResumeFunctorRetType,
           io::IOType T>
-class IOAwaiter {
+class [[nodiscard]] IOAwaiter {
  public:
   IOAwaiter(std::function<ReadyFunctorRetType()>&& ready_functor,
             std::function<ResumeFunctorRetType()>&& resume_functor, int fd)
@@ -82,7 +83,7 @@ class IOAwaiter {
     return false;
   }
 
-  template <typename PromiseType>
+  template <arc::concepts::PromiseT PromiseType>
   void await_suspend(std::coroutine_handle<PromiseType> handle) {
     GetLocalEventLoop().AddIOEvent(
         new events::detail::IOEventBase(fd_, T, handle));

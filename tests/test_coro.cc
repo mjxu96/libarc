@@ -35,6 +35,14 @@ class BasicCoroTest : public ::testing::Test {
     EXPECT_EQ(ret, 50005000);
   }
 
+  coro::Task<void> TimerTestCoro() {
+    auto now = std::chrono::steady_clock::now();
+    co_await arc::coro::SleepFor(std::chrono::milliseconds(1000));
+    auto then = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(then - now).count();
+    EXPECT_NEAR(1000, elapsed, 50);
+  }
+
   void Fail() {
     FAIL() << "Expected std::logic_error";
   }
@@ -61,6 +69,10 @@ TEST_F(BasicCoroTest, LoopTest) {
 
 TEST_F(BasicCoroTest, RecursiveTest) {
   coro::StartEventLoop(RecursiveTestCoro());
+}
+
+TEST_F(BasicCoroTest, TimerTest) {
+  coro::StartEventLoop(TimerTestCoro());
 }
 
 TEST_F(BasicCoroTest, ExceptionTest) {

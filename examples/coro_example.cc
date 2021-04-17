@@ -40,6 +40,8 @@ Task<int> InternalTask(int i) {
         std::string("i cannot be smaller than 0, now is: ") + std::to_string(i);
     throw std::logic_error(error.c_str());
   } else if (i == 0) {
+    std::cout << "sleep for 3 seconds before return" << std::endl;
+    co_await SleepFor(std::chrono::seconds(3));
     co_return i;
   }
   co_return co_await InternalTask(i - 1) + i;
@@ -61,11 +63,11 @@ Task<void> TestFuture(int i) {
 }
 
 Task<void> TestEmptyCoro() {
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < 2; i++) {
     EnsureFuture(TestFuture(0));
   }
   int value = 0;
-  for (int i = 0; i < 1000; i++) {
+  for (int i = 0; i < 2; i++) {
     int ii = co_await InternalTask(1);
     value += ii;
   }
@@ -99,11 +101,26 @@ int test111() {
   return value;
 }
 
-int main() {
+Task<void> SleepTime(int seconds) {
+  co_await SleepFor(std::chrono::seconds(seconds));
+  std::cout << "sleep for " << seconds << std::endl;
+}
+
+Task<void> MultipleTimers(int num) {
+  for (int i = 0; i < num; i++) {
+    EnsureFuture(SleepTime(i));
+  }
+  co_return;
+}
+
+
+
+int main(int argc, char** argv) {
   std::cout << "arc version: " << arc::Version() << std::endl;
   try {
     /* code */
     StartEventLoop(TestEmptyCoro());
+    // StartEventLoop(MultipleTimers(std::stoi(std::string(argv[1]))));
   } catch (const std::exception& e) {
     std::cerr << e.what() << '\n';
   }
