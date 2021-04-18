@@ -49,6 +49,7 @@ using experimental::suspend_never;
 #include <exception>
 #include <iostream>
 #include <string>
+#include <thread>
 
 namespace arc {
 namespace coro {
@@ -72,6 +73,10 @@ class PromiseBase {
 
   void SetNeedClean(bool need_clean = true) { need_manual_clean_ = need_clean; }
 
+  void SetEventLoop(EventLoop* event_loop) {
+    event_loop_ = event_loop;
+  }
+
  protected:
   friend struct FinalAwaiter;
   struct FinalAwaiter {
@@ -91,6 +96,7 @@ class PromiseBase {
   std::coroutine_handle<> continuation_coro_{std::noop_coroutine()};
   ReturnType return_type_{ReturnType::NONE};
   bool need_manual_clean_{false};
+  EventLoop* event_loop_{nullptr};
 };
 
 template <typename T>
@@ -116,7 +122,7 @@ class TaskPromise : public PromiseBase {
 
   void unhandled_exception() {
     if (need_manual_clean_) {
-      GetLocalEventLoop().AddToCleanUpCoroutine(
+      event_loop_->AddToCleanUpCoroutine(
           std::coroutine_handle<TaskPromise<T>>::from_promise(*this));
     }
     return_type_ = ReturnType::EXCEPTION;
@@ -134,7 +140,7 @@ class TaskPromise : public PromiseBase {
       return;
     }
     if (need_manual_clean_) {
-      GetLocalEventLoop().AddToCleanUpCoroutine(
+      event_loop_->AddToCleanUpCoroutine(
           std::coroutine_handle<TaskPromise<T>>::from_promise(*this));
     }
     // new placement to initialize the value_ in union
@@ -180,7 +186,7 @@ class TaskPromise<void> : public PromiseBase {
 
   void unhandled_exception() {
     if (need_manual_clean_) {
-      GetLocalEventLoop().AddToCleanUpCoroutine(
+      event_loop_->AddToCleanUpCoroutine(
           std::coroutine_handle<TaskPromise<void>>::from_promise(*this));
     }
     return_type_ = ReturnType::EXCEPTION;
@@ -194,7 +200,7 @@ class TaskPromise<void> : public PromiseBase {
 
   void return_void() {
     if (need_manual_clean_) {
-      GetLocalEventLoop().AddToCleanUpCoroutine(
+      event_loop_->AddToCleanUpCoroutine(
           std::coroutine_handle<TaskPromise<void>>::from_promise(*this));
     }
     if (return_type_ == ReturnType::EXCEPTION) {
@@ -252,9 +258,17 @@ class [[nodiscard]] Task {
 
   Task& operator=(const Task& other) = delete;
 
-  void Start(bool need_clean = false) {
+  void Start(bool need_clean = false, EventLoop* event_loop = nullptr, bool is_ensured_future = false) {
     need_clean_ = need_clean;
-    coroutine_.resume();
+    if (!event_loop) {
+      event_loop = &GetEventLoop(std::this_thread::get_id());
+    }
+    coroutine_.promise().SetEventLoop(event_loop);
+    if (!is_ensured_future) {
+      coroutine_.resume();
+    } else {
+      event_loop->AddToResumeCoroutine(coroutine_);
+    }
   }
 
   bool await_ready() { return (!coroutine_ || coroutine_.done()); }
@@ -269,11 +283,11 @@ class [[nodiscard]] Task {
   bool need_clean_{false};
 };
 
-void EnsureFuture(Task<void>&& task);
+// void EnsureFuture(Task<void>&& task);
 
-void RunUntilComplelete();
+// void RunUntilComplelete();
 
-void StartEventLoop(Task<void>&& task);
+// void StartEventLoop(Task<void>&& task);
 
 TimeAwaiter SleepFor(const std::chrono::system_clock::duration& duration);
 

@@ -45,7 +45,7 @@ class [[nodiscard]] TLSIOAwaiter {
 
   template <typename PromiseType>
   void await_suspend(std::coroutine_handle<PromiseType> handle) {
-    GetLocalEventLoop().AddIOEvent(
+    GetEventLoop().AddIOEvent(
         new events::detail::IOEventBase(fd_, next_op_, handle));
   }
 

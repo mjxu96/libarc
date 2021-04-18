@@ -63,8 +63,8 @@ Task<void> TestFuture(int i) {
 }
 
 Task<void> TestEmptyCoro() {
-  for (int i = 0; i < 2; i++) {
-    EnsureFuture(TestFuture(0));
+  for (int i = 0; i < 3; i++) {
+    GetEventLoop().EnsureFuture(TestFuture(0));
   }
   int value = 0;
   for (int i = 0; i < 2; i++) {
@@ -72,21 +72,21 @@ Task<void> TestEmptyCoro() {
     value += ii;
   }
   std::cout << value << std::endl;
-  std::cout << co_await InternalTask(100000) << std::endl;
+  // std::cout << co_await InternalTask(100000) << std::endl;
 
-  std::cout << *(co_await TestMove(123)) << std::endl;
+  // std::cout << *(co_await TestMove(123)) << std::endl;
 
-  try {
-    co_await InternalTask(-100);
-  } catch (const std::exception& e) {
-    std::cerr << e.what() << '\n';
-  }
+  // try {
+  //   co_await InternalTask(-100);
+  // } catch (const std::exception& e) {
+  //   std::cerr << e.what() << '\n';
+  // }
 
-  try {
-    co_await TestException();
-  } catch (const std::exception& e) {
-    std::cerr << e.what() << '\n';
-  }
+  // try {
+  //   co_await TestException();
+  // } catch (const std::exception& e) {
+  //   std::cerr << e.what() << '\n';
+  // }
 
   // throw std::logic_error("som");
 
@@ -102,13 +102,16 @@ int test111() {
 }
 
 Task<void> SleepTime(int seconds) {
+  std::cout << "before sleep for " << seconds << std::endl;
   co_await SleepFor(std::chrono::seconds(seconds));
   std::cout << "sleep for " << seconds << std::endl;
 }
 
 Task<void> MultipleTimers(int num) {
+  std::cout << num << std::endl;
+  // for (int i = num; i > 0; i--) {
   for (int i = 0; i < num; i++) {
-    EnsureFuture(SleepTime(i));
+    GetEventLoop().EnsureFuture(SleepTime(i));
   }
   co_return;
 }
@@ -119,8 +122,8 @@ int main(int argc, char** argv) {
   std::cout << "arc version: " << arc::Version() << std::endl;
   try {
     /* code */
-    StartEventLoop(TestEmptyCoro());
-    // StartEventLoop(MultipleTimers(std::stoi(std::string(argv[1]))));
+    // GetEventLoop().StartLoop(TestEmptyCoro());
+    GetEventLoop().StartLoop(MultipleTimers(std::stoi(std::string(argv[1]))));
   } catch (const std::exception& e) {
     std::cerr << e.what() << '\n';
   }

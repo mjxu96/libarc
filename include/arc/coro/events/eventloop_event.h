@@ -1,22 +1,22 @@
 /*
- * File: task.cc
+ * File: eventloop_event.h
  * Project: libarc
- * File Created: Sunday, 20th December 2020 3:40:17 pm
+ * File Created: Sunday, 18th April 2021 5:19:54 pm
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
  * Copyright (c) 2020 Minjun Xu
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
  * deal in the Software without restriction, including without limitation the
  * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
  * sell copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -26,25 +26,24 @@
  * IN THE SOFTWARE.
  */
 
-#include <arc/coro/task.h>
+#ifndef LIBARC__CORO__EVENTS__EVENTLOOP_EVENT_H
+#define LIBARC__CORO__EVENTS__EVENTLOOP_EVENT_H
 
-using namespace arc::coro;
+#include "io_event_base.h"
 
-// void arc::coro::EnsureFuture(Task<void>&& task) { task.Start(true); }
+namespace arc {
+namespace events {
+namespace detail {
 
-// void arc::coro::RunUntilComplelete() {
-//   auto& event_loop = GetEventLoop();
-//   while (!event_loop.IsDone()) {
-//     event_loop.Do();
-//   }
-//   event_loop.CleanUpFinishedCoroutines();
-// }
+class EventLoopEvent : public IOEventBase {
+ public:
+  EventLoopEvent(int fd, std::coroutine_handle<void> handle)
+      : IOEventBase(fd, io::IOType::READ, handle) {}
+  virtual ~EventLoopEvent() {}
+};
 
-// void arc::coro::StartEventLoop(Task<void>&& task) {
-//   task.Start(true);
-//   RunUntilComplelete();
-// }
+}  // namespace detail
+}  // namespace events
+}  // namespace arc
 
-TimeAwaiter arc::coro::SleepFor(const std::chrono::system_clock::duration& duration) {
-  return TimeAwaiter(duration);
-}
+#endif

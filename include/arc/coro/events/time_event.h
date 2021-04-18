@@ -57,16 +57,8 @@ class TimerEvent : public IOEventBase {
 class AsyncTimerController : public io::detail::IOBase {
  public:
   AsyncTimerController() : io::detail::IOBase() {
-    fd_ = timerfd_create(CLOCK_MONOTONIC, 0);
+    fd_ = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
     if (fd_ < 0) {
-      throw arc::exception::IOException("Creating Local Timer Error");
-    }
-    int flags = fcntl(fd_, F_GETFL);
-    if (flags < 0) {
-      throw arc::exception::IOException("Creating Local Timer Error");
-    }
-    flags = fcntl(fd_, F_SETFL, flags | O_NONBLOCK);
-    if (flags < 0) {
       throw arc::exception::IOException("Creating Local Timer Error");
     }
   }
@@ -81,7 +73,7 @@ class AsyncTimerController : public io::detail::IOBase {
     q_.push(next_wakeup_time);
     assert(handles_.find(next_wakeup_time) == handles_.end());
     handles_[next_wakeup_time] = handle;
-    if (q_.size() == 1) {
+    if (q_.top() == next_wakeup_time) {
       FireNextAvailableTimePoint();
     }
   }
@@ -100,7 +92,7 @@ class AsyncTimerController : public io::detail::IOBase {
     if (ret < 0) {
       throw arc::exception::IOException("Set Timer Error");
     }
-    coro::GetLocalEventLoop().AddIOEvent(new TimerEvent(fd_, handle));
+    coro::GetEventLoop().AddIOEvent(new TimerEvent(fd_, handle), true);
   }
 
   void PopFirstTimePoint() {

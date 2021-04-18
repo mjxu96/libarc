@@ -30,10 +30,12 @@
 #define LIBARC__CORO__EVENTLOOP_H
 
 #include <arc/coro/events/io_event_base.h>
+#include <arc/concept/coro.h>
 #include <arc/io/io_base.h>
 #include <arc/utils/bits.h>
 #include <assert.h>
 #include <sys/epoll.h>
+#include <mutex>
 
 #ifdef __clang__
 #include <experimental/coroutine>
@@ -48,30 +50,38 @@ using experimental::coroutine_handle;
 #include <queue>
 #include <unordered_map>
 #include <unordered_set>
+#include <thread>
 
 namespace arc {
 namespace coro {
 
+template <arc::concepts::CopyableMoveableOrVoid T>
+class [[nodiscard]] Task;
+
 class EventLoop : public io::detail::IOBase {
  public:
   EventLoop();
-  ~EventLoop() = default;
+  virtual ~EventLoop();
 
   bool IsDone();
   void Do();
-  void AddIOEvent(events::detail::IOEventBase* event);
+  void AddIOEvent(events::detail::IOEventBase* event, bool replace = false);
   void RemoveIOEvent(events::detail::IOEventBase* event);
 
-  void AddToCleanUpCoroutine(std::coroutine_handle<> handle);
+  void AddToCleanUpCoroutine(std::coroutine_handle<void> handle);
+  void AddToResumeCoroutine(std::coroutine_handle<void> handle);
 
-  void CleanUp();
   void CleanUpFinishedCoroutines();
+
+  void EnsureFuture(Task<void>&& task);
+  void StartLoop(Task<void>&& task);
 
  private:
   const static int kMaxEventsSizePerWait_ = 1024;
   const static int kMaxFdInArray_ = 1024;
 
   int total_added_task_num_{0};
+  std::recursive_mutex eventloop_op_lock_;
 
   // {fd -> {io_type -> [events]}}
   std::vector<std::vector<std::deque<events::detail::IOEventBase*>>> io_events_{
@@ -80,11 +90,6 @@ class EventLoop : public io::detail::IOBase {
 
   std::unordered_map<int, std::vector<std::deque<events::detail::IOEventBase*>>>
       extra_io_events_{};
-
-  // std::unordered_map<std::uint64_t, events::CoroTaskEvent*> coro_events_;
-  // std::list<events::CoroTaskEvent*> finished_coro_events_;
-
-  // std::uint64_t current_coro_id_{0};
 
   // epoll related
   epoll_event events[kMaxEventsSizePerWait_];
@@ -95,10 +100,17 @@ class EventLoop : public io::detail::IOBase {
   events::detail::IOEventBase* GetEvent(int fd,
                                         events::detail::IOEventType event_type);
 
-  std::vector<std::coroutine_handle<>> to_clean_up_handles_{};
+  // to resumed coroutines
+  int eventfd_{-1};
+  void RunUntilComplelete();
+  void TriggerResumableCoroutines();
+  std::vector<std::coroutine_handle<void>> to_clean_up_handles_{};
+  std::deque<std::coroutine_handle<void>> to_resume_handles_;
 };
 
-EventLoop& GetLocalEventLoop();
+// EventLoop& GetLocalEventLoop();
+EventLoop& GetEventLoop(std::thread::id id = std::this_thread::get_id());
+std::unordered_map<std::thread::id, std::shared_ptr<arc::coro::EventLoop>>& GetAllEventLoops();
 
 }  // namespace coro
 }  // namespace arc

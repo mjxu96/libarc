@@ -27,7 +27,15 @@
  */
 
 #include <arc/coro/eventloop.h>
+#include <arc/coro/task.h>
 #include <arc/exception/io.h>
+#include <sys/eventfd.h>
+
+#include <memory>
+
+std::mutex global_event_loop_lock;
+std::unordered_map<std::thread::id, std::shared_ptr<arc::coro::EventLoop>>
+    global_event_loops;
 
 using namespace arc::coro;
 
@@ -36,11 +44,44 @@ EventLoop::EventLoop() {
   if (fd_ < 0) {
     throw arc::exception::IOException();
   }
+  eventfd_ = eventfd(0, EFD_NONBLOCK);
+  if (eventfd_ < 0) {
+    throw arc::exception::IOException("Epoll Eventfd Creation Error");
+  }
+  // add eventfd into epoll
+  epoll_event e_event{};
+  e_event.events = EPOLLIN | EPOLLET;
+  e_event.data.fd = eventfd_;
+  int ret = epoll_ctl(fd_, EPOLL_CTL_ADD, eventfd_, &e_event);
+  if (ret < 0) {
+    throw arc::exception::IOException("Epoll Eventfd Creation Error");
+  }
 }
 
-bool EventLoop::IsDone() { return total_added_task_num_ <= 0; }
+EventLoop::~EventLoop() {
+  if (eventfd_ >= 0) {
+    epoll_ctl(fd_, EPOLL_CTL_DEL, eventfd_, nullptr);
+    close(eventfd_);
+  }
+}
+
+bool EventLoop::IsDone() {
+  std::lock_guard<std::recursive_mutex> guard(eventloop_op_lock_);
+  return (to_resume_handles_.empty() && total_added_task_num_ <= 0);
+}
 
 void EventLoop::Do() {
+  // {
+  //   std::lock_guard<std::recursive_mutex> guard(eventloop_op_lock_);
+  //   int cnt = to_resume_handles_.size();
+  //   for (int i = 0; i < cnt; i++) {
+  //     to_resume_handles_[i].resume();
+  //   }
+  //   for (int i = 0; i < cnt; i++) {
+  //     to_resume_handles_.pop_front();
+  //   }
+  // }
+
   CleanUpFinishedCoroutines();
 
   if (total_added_task_num_ <= 0) {
@@ -51,8 +92,13 @@ void EventLoop::Do() {
   // Then we will handle all others
   int event_cnt = epoll_wait(fd_, events, kMaxEventsSizePerWait_, -1);
   int todo_cnt = 0;
+  bool is_resumable_coroutines_added = false;
   for (int i = 0; i < event_cnt; i++) {
     int fd = events[i].data.fd;
+    if (fd == eventfd_) {
+      is_resumable_coroutines_added = true;
+      continue;
+    }
     int event_type = events[i].events;
     if (event_type & EPOLLIN) {
       todo_events[todo_cnt] = GetEvent(fd, events::detail::IOEventType::READ);
@@ -67,9 +113,11 @@ void EventLoop::Do() {
       throw arc::exception::IOException();
     }
   }
+
   // currently we enforce this constraint
   // in future we will remove this one
-  assert(todo_cnt == event_cnt);
+  assert((todo_cnt == event_cnt) ||
+         ((todo_cnt + 1 == event_cnt) && is_resumable_coroutines_added));
 
   for (int i = 0; i < todo_cnt; i++) {
     RemoveIOEvent(todo_events[i]);
@@ -80,28 +128,41 @@ void EventLoop::Do() {
     delete todo_events[i];
   }
 
+  if (is_resumable_coroutines_added) {
+    TriggerResumableCoroutines();
+  }
+
   total_added_task_num_ -= todo_cnt;
 }
 
-void EventLoop::AddIOEvent(events::detail::IOEventBase* event) {
+void EventLoop::AddIOEvent(events::detail::IOEventBase* event, bool replace) {
   auto target_fd = event->GetFd();
   events::detail::IOEventType event_type = event->GetIOEventType();
   total_added_task_num_++;
   int should_add_event =
       (event_type == events::detail::IOEventType::READ ? EPOLLIN : EPOLLOUT);
   int prev_events = GetExistIOEvent(target_fd);
+  std::deque<arc::events::detail::IOEventBase *>* to_be_added_queue = nullptr;
   if ((prev_events & should_add_event) == 0) {
     if (target_fd < kMaxFdInArray_) {
-      io_events_[target_fd][static_cast<int>(event_type)].push_back(event);
+      to_be_added_queue = &(io_events_[target_fd][static_cast<int>(event_type)]);
     } else {
       if (extra_io_events_.find(target_fd) == extra_io_events_.end()) {
         extra_io_events_[target_fd] =
             std::vector<std::deque<events::detail::IOEventBase*>>{
                 2, std::deque<events::detail::IOEventBase*>{}};
       }
-      extra_io_events_[target_fd][static_cast<int>(event_type)].push_back(
-          event);
+      to_be_added_queue = &(extra_io_events_[target_fd][static_cast<int>(event_type)]);
     }
+
+    if (replace) {
+      assert(to_be_added_queue->empty());
+      for (auto item : *to_be_added_queue) {
+        delete item;
+      }
+      to_be_added_queue->clear();
+    }
+    to_be_added_queue->push_back(event);
 
     int op = (prev_events == 0 ? EPOLL_CTL_ADD : EPOLL_CTL_MOD);
     epoll_event e_event{};
@@ -115,11 +176,18 @@ void EventLoop::AddIOEvent(events::detail::IOEventBase* event) {
   } else {
     // already added
     if (target_fd < kMaxFdInArray_) {
-      io_events_[target_fd][static_cast<int>(event_type)].push_back(event);
+      to_be_added_queue = &(io_events_[target_fd][static_cast<int>(event_type)]);
     } else {
-      extra_io_events_[target_fd][static_cast<int>(event_type)].push_back(
-          event);
+      to_be_added_queue = &(extra_io_events_[target_fd][static_cast<int>(event_type)]);
     }
+    if (replace) {
+      assert(to_be_added_queue->size() == 1);
+      for (auto item : *to_be_added_queue) {
+        delete item;
+      }
+      to_be_added_queue->clear();
+    }
+    to_be_added_queue->push_back(event);
     return;
   }
 }
@@ -200,6 +268,31 @@ void EventLoop::AddToCleanUpCoroutine(std::coroutine_handle<> handle) {
   to_clean_up_handles_.push_back(handle);
 }
 
+void EventLoop::AddToResumeCoroutine(std::coroutine_handle<void> handle) {
+  std::lock_guard<std::recursive_mutex> guard(eventloop_op_lock_);
+  to_resume_handles_.push_back(handle);
+  uint64_t inc = 1;
+  int written = write(eventfd_, &inc, sizeof(inc));
+  if (written < 0) {
+    throw arc::exception::IOException("Add Resumable Croutine Failure");
+  }
+}
+
+void EventLoop::TriggerResumableCoroutines() {
+  std::lock_guard<std::recursive_mutex> guard(eventloop_op_lock_);
+  uint64_t num = 0;
+  int read_size = read(eventfd_, &num, sizeof(num));
+  if (read_size < 0 || num > to_resume_handles_.size()) {
+    throw arc::exception::IOException("Trigger Resumable Coroutines Failure");
+  }
+  for (int i = 0; i < num; i++) {
+    to_resume_handles_[i].resume();
+  }
+  for (int i = 0; i < num; i++) {
+    to_resume_handles_.pop_front();
+  }
+}
+
 void EventLoop::CleanUpFinishedCoroutines() {
   for (auto& to_clean_up_handle : to_clean_up_handles_) {
     to_clean_up_handle.destroy();
@@ -207,7 +300,36 @@ void EventLoop::CleanUpFinishedCoroutines() {
   to_clean_up_handles_.clear();
 }
 
-arc::coro::EventLoop& arc::coro::GetLocalEventLoop() {
-  thread_local EventLoop loop{};
-  return loop;
+void EventLoop::EnsureFuture(arc::coro::Task<void>&& task) {
+  task.Start(true, this, true);
+}
+
+void EventLoop::StartLoop(arc::coro::Task<void>&& task) {
+  task.Start(true, this, false);
+  RunUntilComplelete();
+}
+
+void EventLoop::RunUntilComplelete() {
+  while (!IsDone()) {
+    Do();
+  }
+  CleanUpFinishedCoroutines();
+}
+
+// arc::coro::EventLoop& arc::coro::GetLocalEventLoop() {
+//   thread_local EventLoop loop{};
+//   return loop;
+// }
+
+arc::coro::EventLoop& arc::coro::GetEventLoop(std::thread::id id) {
+  std::lock_guard<std::mutex> guard(global_event_loop_lock);
+  if (global_event_loops.find(id) == global_event_loops.end()) {
+    global_event_loops[id] = std::make_shared<arc::coro::EventLoop>();
+  }
+  return *global_event_loops[id];
+}
+
+std::unordered_map<std::thread::id, std::shared_ptr<arc::coro::EventLoop>>&
+arc::coro::GetAllEventLoops() {
+  return global_event_loops;
 }

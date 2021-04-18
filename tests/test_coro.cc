@@ -60,23 +60,23 @@ class BasicCoroTest : public ::testing::Test {
 };
 
 TEST_F(BasicCoroTest, SimpleTest) {
-  coro::StartEventLoop(SimpleTestCoro());
+  arc::coro::GetEventLoop().StartLoop(SimpleTestCoro());
 }
 
 TEST_F(BasicCoroTest, LoopTest) {
-  coro::StartEventLoop(LoopTestCoro());
+  arc::coro::GetEventLoop().StartLoop(LoopTestCoro());
 }
 
 TEST_F(BasicCoroTest, RecursiveTest) {
-  coro::StartEventLoop(RecursiveTestCoro());
+  arc::coro::GetEventLoop().StartLoop(RecursiveTestCoro());
 }
 
 TEST_F(BasicCoroTest, TimerTest) {
-  coro::StartEventLoop(TimerTestCoro());
+  arc::coro::GetEventLoop().StartLoop(TimerTestCoro());
 }
 
 TEST_F(BasicCoroTest, ExceptionTest) {
-  coro::StartEventLoop(ExceptionTestCoro());
+  arc::coro::GetEventLoop().StartLoop(ExceptionTestCoro());
 }
  
 } // namespace testing
