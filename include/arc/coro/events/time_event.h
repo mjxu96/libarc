@@ -81,7 +81,7 @@ class AsyncTimerController : public io::detail::IOBase {
     q_.push(next_wakeup_time);
     assert(handles_.find(next_wakeup_time) == handles_.end());
     handles_[next_wakeup_time] = handle;
-    if (q_.size() == 1) {
+    if (q_.top() == next_wakeup_time) {
       FireNextAvailableTimePoint();
     }
   }
@@ -100,7 +100,7 @@ class AsyncTimerController : public io::detail::IOBase {
     if (ret < 0) {
       throw arc::exception::IOException("Set Timer Error");
     }
-    coro::GetLocalEventLoop().AddIOEvent(new TimerEvent(fd_, handle));
+    coro::GetLocalEventLoop().AddIOEvent(new TimerEvent(fd_, handle), true);
   }
 
   void PopFirstTimePoint() {

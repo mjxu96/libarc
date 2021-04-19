@@ -34,6 +34,8 @@
 #include <arc/utils/bits.h>
 #include <assert.h>
 #include <sys/epoll.h>
+#include <arc/concept/coro.h>
+#include <arc/coro/dispatcher.h>
 
 #ifdef __clang__
 #include <experimental/coroutine>
@@ -52,6 +54,15 @@ using experimental::coroutine_handle;
 namespace arc {
 namespace coro {
 
+enum class EventLoopType {
+  PRODUCER = 0U,
+  CONSUMER,
+  NONE,
+};
+
+template <arc::concepts::CopyableMoveableOrVoid T>
+class [[nodiscard]] Task;
+
 class EventLoop : public io::detail::IOBase {
  public:
   EventLoop();
@@ -59,7 +70,7 @@ class EventLoop : public io::detail::IOBase {
 
   bool IsDone();
   void Do();
-  void AddIOEvent(events::detail::IOEventBase* event);
+  void AddIOEvent(events::detail::IOEventBase* event, bool replace = false);
   void RemoveIOEvent(events::detail::IOEventBase* event);
 
   void AddToCleanUpCoroutine(std::coroutine_handle<> handle);
@@ -67,9 +78,15 @@ class EventLoop : public io::detail::IOBase {
   void CleanUp();
   void CleanUpFinishedCoroutines();
 
+  void Dispatch(Task<void>&& task);
+  void AsProducer();
+  void AsConsumer();
+
  private:
   const static int kMaxEventsSizePerWait_ = 1024;
   const static int kMaxFdInArray_ = 1024;
+  const static int kEpollWaitTimeout_ = 1;
+  const static int kMaxConsumableCoroutineNum_ = 4;
 
   int total_added_task_num_{0};
 
@@ -81,11 +98,6 @@ class EventLoop : public io::detail::IOBase {
   std::unordered_map<int, std::vector<std::deque<events::detail::IOEventBase*>>>
       extra_io_events_{};
 
-  // std::unordered_map<std::uint64_t, events::CoroTaskEvent*> coro_events_;
-  // std::list<events::CoroTaskEvent*> finished_coro_events_;
-
-  // std::uint64_t current_coro_id_{0};
-
   // epoll related
   epoll_event events[kMaxEventsSizePerWait_];
   events::detail::IOEventBase* todo_events[2 * kMaxEventsSizePerWait_] = {
@@ -96,6 +108,12 @@ class EventLoop : public io::detail::IOBase {
                                         events::detail::IOEventType event_type);
 
   std::vector<std::coroutine_handle<>> to_clean_up_handles_{};
+
+  std::vector<std::coroutine_handle<>> to_dispatched_coroutines_{};
+  EventDispatcher<std::coroutine_handle<void>>* global_dispatcher_{nullptr};
+  EventLoopType type_{EventLoopType::NONE};
+  void ConsumeCoroutine();
+  void ProduceCoroutine();
 };
 
 EventLoop& GetLocalEventLoop();

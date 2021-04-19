@@ -102,13 +102,16 @@ int test111() {
 }
 
 Task<void> SleepTime(int seconds) {
+  std::cout << "before sleep for " << seconds << std::endl;
+  auto now = std::chrono::system_clock::now();
   co_await SleepFor(std::chrono::seconds(seconds));
-  std::cout << "sleep for " << seconds << std::endl;
+  auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - now).count();
+  std::cout << "after sleep for " << seconds << " actually slept for " << elapsed << std::endl;
 }
 
 Task<void> MultipleTimers(int num) {
   for (int i = 0; i < num; i++) {
-    EnsureFuture(SleepTime(i));
+    EnsureFuture(SleepTime(num - i));
   }
   co_return;
 }

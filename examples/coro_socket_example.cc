@@ -44,6 +44,17 @@ const std::string ret =
     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     "aaaaa";
 
+Task<void> LongTimeJob() {
+  std::cout << "start of long time job" << std::endl;
+  co_await SleepFor(std::chrono::seconds(86400));
+  std::cout << "end of long time job" << std::endl;
+}
+
+void StartLongTimeJob() {
+  GetLocalEventLoop().AsConsumer();
+  StartEventLoop(LongTimeJob());
+}
+
 Task<void> HandleClient(
     Socket<Domain::IPV4, Protocol::TCP, Pattern::ASYNC> sock) {
   try {
@@ -52,8 +63,7 @@ Task<void> HandleClient(
       if (recv.size() == 0) {
         break;
       }
-      std::string ret_in_stack = std::string(ret.c_str(), ret.size());
-      co_await sock.Send(ret_in_stack.c_str(), ret_in_stack.size());
+      co_await sock.Send(ret.c_str(), ret.size());
     }
   } catch (const std::exception& e) {
     std::cerr << e.what() << '\n';
@@ -132,12 +142,38 @@ Task<void> TLSAccept() {
   while (i < 2) {
     auto in_sock = co_await accpetor.Accept();
     EnsureFuture(HandleClient(std::move(in_sock)));
-    // i++;
-    // std::cout << co_await in_sock.Recv() << std::endl;
-    // std::cout << co_await in_sock.Send(ret.c_str(), ret.size()) << std::endl;
-    // i++;
-    // co_await in_sock.Shutdown();
   }
+}
+
+Task<void> DispatchAccept(int thread_num) {
+  Acceptor<Domain::IPV4, Pattern::ASYNC> accpetor;
+  // TLSAcceptor<Domain::IPV4, Pattern::ASYNC> accpetor("/home/minjun/data/keys/server.pem", "/home/minjun/data/keys/server.pem");
+  std::cout << "acceptor fd: " << accpetor.GetFd() << std::endl;
+  accpetor.SetOption(arc::net::SocketOption::REUSEADDR, 1);
+  uint16_t port = 8086;
+  accpetor.Bind({"localhost", port});
+  accpetor.Listen();
+  std::cout << "http listen starts at " << port << std::endl;
+  int i = 0;
+  arc::coro::GetLocalEventLoop().AsProducer();
+  std::vector<std::thread> threads;
+  for (int i = 0; i < thread_num; i++) {
+    threads.emplace_back(StartLongTimeJob);
+  }
+  while (i < 2) {
+    auto in_sock = co_await accpetor.Accept();
+    // std::cout << "accepted one client" << std::endl;
+    arc::coro::GetLocalEventLoop().Dispatch(HandleClient(std::move(in_sock)));
+  }
+  co_await SleepFor(std::chrono::seconds(1));
+  for (int i = 0; i < thread_num; i++) {
+    threads[i].join();
+  }
+  co_return;
+}
+
+void DispatchHttpStart(int thread_num) {
+  StartEventLoop(DispatchAccept(thread_num));
 }
 
 void Start() { StartEventLoop(Listen()); }
@@ -146,15 +182,16 @@ void TLSStart() { StartEventLoop(TLSAccept()); }
 
 int main(int argc, char** argv) {
   // StartEventLoop(Connect());
-  std::vector<std::thread> threads;
+  // std::vector<std::thread> threads;
   int thread_num = std::stoi(std::string(argv[1]));
-  for (int i = 0; i < thread_num; i++) {
-    threads.emplace_back(TLSStart);
-  }
+  // for (int i = 0; i < thread_num; i++) {
+  //   threads.emplace_back(TLSStart);
+  // }
 
-  for (int i = 0; i < thread_num; i++) {
-    threads[i].join();
-  }
+  // for (int i = 0; i < thread_num; i++) {
+  //   threads[i].join();
+  // }
+  DispatchHttpStart(thread_num);
 
   std::cout << "finished" << std::endl;
   // StartEventLoop(TLSAccept());

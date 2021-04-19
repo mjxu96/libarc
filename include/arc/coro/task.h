@@ -253,8 +253,16 @@ class [[nodiscard]] Task {
   Task& operator=(const Task& other) = delete;
 
   void Start(bool need_clean = false) {
-    need_clean_ = need_clean;
+    SetNeedClean(need_clean);
     coroutine_.resume();
+  }
+
+  std::coroutine_handle<void> GetCoroutine() const {
+    return coroutine_;
+  }
+
+  void SetNeedClean(bool need_clean = false) {
+    need_clean_ = need_clean;
   }
 
   bool await_ready() { return (!coroutine_ || coroutine_.done()); }

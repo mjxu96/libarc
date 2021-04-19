@@ -1,17 +1,17 @@
 libarc - C++ Library with concepts and coroutine support
 
 Benchmark:
-clang++-11, Single-threaded
-~168k requests/sec while Vertx is about ~142k
+clang++-11, Single-threaded, Reactor pattern
+~205k requests/sec while Vertx is about ~142k
 
-Running 10s test @ http://localhost:8080
+Running 10s test @ http://127.0.0.1:8086
   8 threads and 400 connections
   Thread Stats   Avg      Stdev     Max   +/- Stdev
-    Latency     2.37ms  650.35us  23.68ms   97.61%
-    Req/Sec    21.33k     5.92k  176.02k    98.88%
-  1699949 requests in 10.10s, 61.61MB read
-Requests/sec: 168315.18
-Transfer/sec:      6.10MB
+    Latency     2.05ms    2.62ms 116.05ms   99.72%
+    Req/Sec    25.86k     2.74k   70.75k    77.38%
+  2058099 requests in 10.02s, 404.33MB read
+Requests/sec: 205338.30
+Transfer/sec:     40.34MB
 
 Clang-format command:
 

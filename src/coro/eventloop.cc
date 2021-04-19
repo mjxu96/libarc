@@ -27,6 +27,7 @@
  */
 
 #include <arc/coro/eventloop.h>
+#include <arc/coro/task.h>
 #include <arc/exception/io.h>
 
 using namespace arc::coro;
@@ -38,18 +39,32 @@ EventLoop::EventLoop() {
   }
 }
 
-bool EventLoop::IsDone() { return total_added_task_num_ <= 0; }
+bool EventLoop::IsDone() {
+  return (total_added_task_num_ <= 0) && (to_dispatched_coroutines_.empty() ||
+                                          type_ != EventLoopType::PRODUCER);
+}
 
 void EventLoop::Do() {
+  if (type_ == EventLoopType::CONSUMER) [[likely]] {
+    ConsumeCoroutine();
+  } else if (type_ == EventLoopType::PRODUCER) [[unlikely]] {
+    ProduceCoroutine();
+  }
+
   CleanUpFinishedCoroutines();
 
-  if (total_added_task_num_ <= 0) {
+  if ((total_added_task_num_ <= 0)) {
     assert(to_clean_up_handles_.empty());
+    while (!to_dispatched_coroutines_.empty() &&
+           type_ != EventLoopType::PRODUCER) {
+      ProduceCoroutine();
+    }
     return;
   }
 
   // Then we will handle all others
-  int event_cnt = epoll_wait(fd_, events, kMaxEventsSizePerWait_, -1);
+  int event_cnt =
+      epoll_wait(fd_, events, kMaxEventsSizePerWait_, kEpollWaitTimeout_);
   int todo_cnt = 0;
   for (int i = 0; i < event_cnt; i++) {
     int fd = events[i].data.fd;
@@ -83,25 +98,31 @@ void EventLoop::Do() {
   total_added_task_num_ -= todo_cnt;
 }
 
-void EventLoop::AddIOEvent(events::detail::IOEventBase* event) {
+void EventLoop::AddIOEvent(events::detail::IOEventBase* event, bool replace) {
   auto target_fd = event->GetFd();
   events::detail::IOEventType event_type = event->GetIOEventType();
   total_added_task_num_++;
   int should_add_event =
       (event_type == events::detail::IOEventType::READ ? EPOLLIN : EPOLLOUT);
   int prev_events = GetExistIOEvent(target_fd);
+  std::deque<arc::events::detail::IOEventBase*>* to_be_pushed_queue = nullptr;
   if ((prev_events & should_add_event) == 0) {
     if (target_fd < kMaxFdInArray_) {
-      io_events_[target_fd][static_cast<int>(event_type)].push_back(event);
+      to_be_pushed_queue = &io_events_[target_fd][static_cast<int>(event_type)];
     } else {
       if (extra_io_events_.find(target_fd) == extra_io_events_.end()) {
         extra_io_events_[target_fd] =
             std::vector<std::deque<events::detail::IOEventBase*>>{
                 2, std::deque<events::detail::IOEventBase*>{}};
       }
-      extra_io_events_[target_fd][static_cast<int>(event_type)].push_back(
-          event);
+      to_be_pushed_queue =
+          &extra_io_events_[target_fd][static_cast<int>(event_type)];
     }
+
+    if (replace) [[unlikely]] {
+      assert(to_be_pushed_queue->empty());
+    }
+    to_be_pushed_queue->push_back(event);
 
     int op = (prev_events == 0 ? EPOLL_CTL_ADD : EPOLL_CTL_MOD);
     epoll_event e_event{};
@@ -115,11 +136,18 @@ void EventLoop::AddIOEvent(events::detail::IOEventBase* event) {
   } else {
     // already added
     if (target_fd < kMaxFdInArray_) {
-      io_events_[target_fd][static_cast<int>(event_type)].push_back(event);
+      to_be_pushed_queue = &io_events_[target_fd][static_cast<int>(event_type)];
     } else {
-      extra_io_events_[target_fd][static_cast<int>(event_type)].push_back(
-          event);
+      to_be_pushed_queue =
+          &extra_io_events_[target_fd][static_cast<int>(event_type)];
     }
+    if (replace) [[unlikely]] {
+      assert(to_be_pushed_queue->size() == 1);
+      delete to_be_pushed_queue->front();
+      total_added_task_num_--;
+      to_be_pushed_queue->clear();
+    }
+    to_be_pushed_queue->push_back(event);
     return;
   }
 }
@@ -205,6 +233,53 @@ void EventLoop::CleanUpFinishedCoroutines() {
     to_clean_up_handle.destroy();
   }
   to_clean_up_handles_.clear();
+}
+
+void EventLoop::Dispatch(arc::coro::Task<void>&& task) {
+  assert(type_ == EventLoopType::PRODUCER);
+  task.SetNeedClean(true);
+  to_dispatched_coroutines_.push_back(task.GetCoroutine());
+}
+
+void EventLoop::AsProducer() {
+  assert(type_ == EventLoopType::NONE);
+  type_ = EventLoopType::PRODUCER;
+  global_dispatcher_ = &GetGlobalEventDispatcher<std::coroutine_handle<void>>();
+  global_dispatcher_->RegisterAsProducerEvent();
+}
+
+void EventLoop::AsConsumer() {
+  assert(type_ == EventLoopType::NONE);
+  type_ = EventLoopType::CONSUMER;
+  global_dispatcher_ = &GetGlobalEventDispatcher<std::coroutine_handle<void>>();
+}
+
+void EventLoop::ConsumeCoroutine() {
+  std::coroutine_handle<void> coroutines[kMaxConsumableCoroutineNum_] = {0};
+  int size =
+      global_dispatcher_->DequeueBulk(coroutines, kMaxConsumableCoroutineNum_);
+  for (int i = 0; i < size; i++) {
+    coroutines[i].resume();
+  }
+}
+
+void EventLoop::ProduceCoroutine() {
+  if (to_dispatched_coroutines_.empty()) {
+    return;
+  }
+  if (!global_dispatcher_->EnqueueBulk(to_dispatched_coroutines_.begin(),
+                                       to_dispatched_coroutines_.size())) {
+    auto itr = to_dispatched_coroutines_.begin();
+    while (itr != to_dispatched_coroutines_.end()) {
+      if (!global_dispatcher_->Enqueue(std::move(*itr))) {
+        break;
+      } else {
+        itr = to_dispatched_coroutines_.erase(itr);
+      }
+    }
+  } else {
+    to_dispatched_coroutines_.clear();
+  }
 }
 
 arc::coro::EventLoop& arc::coro::GetLocalEventLoop() {

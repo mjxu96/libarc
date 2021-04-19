@@ -35,12 +35,23 @@ class BasicCoroTest : public ::testing::Test {
     EXPECT_EQ(ret, 50005000);
   }
 
-  coro::Task<void> TimerTestCoro() {
+  coro::Task<void> TimerTestCoro(int milliseconds) {
+    const float kMaxAllowedRefError = 0.05;
     auto now = std::chrono::steady_clock::now();
-    co_await arc::coro::SleepFor(std::chrono::milliseconds(1000));
+    co_await arc::coro::SleepFor(std::chrono::milliseconds(milliseconds));
     auto then = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(then - now).count();
-    EXPECT_NEAR(1000, elapsed, 50);
+    EXPECT_NEAR(milliseconds, elapsed, (milliseconds * kMaxAllowedRefError));
+    co_return;
+  }
+
+  coro::Task<void> TestMultiPleTimer(int count) {
+    int min_sleep_time = 200;
+    int step = 100;
+    for (int i = count; i > 0; i--) {
+      arc::coro::EnsureFuture(TimerTestCoro(min_sleep_time + step * i));
+    }
+    co_return;
   }
 
   void Fail() {
@@ -72,7 +83,8 @@ TEST_F(BasicCoroTest, RecursiveTest) {
 }
 
 TEST_F(BasicCoroTest, TimerTest) {
-  coro::StartEventLoop(TimerTestCoro());
+  coro::StartEventLoop(TimerTestCoro(1000));
+  coro::StartEventLoop(TestMultiPleTimer(5));
 }
 
 TEST_F(BasicCoroTest, ExceptionTest) {
