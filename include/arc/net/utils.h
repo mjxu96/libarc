@@ -51,8 +51,10 @@ enum class SocketType {
 
 enum class Protocol {
   AUTO = 0U,
-  TCP = 1U,
-  UDP = 2U,
+  IP,
+  TCP,
+  UDP,
+  UNIX,
 };
 
 enum class SocketLevel {

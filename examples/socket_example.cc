@@ -30,7 +30,7 @@
 using namespace arc::io;
 using namespace arc::net;
 
-std::string req = "GET / HTTP/1.1\r\nHost: www.baidu.com\r\nConnection: close\r\n\r\n";
+std::string req = "GET / HTTP/1.1\r\nHost: www.google.com\r\nConnection: keep-alive\r\n\r\n";
 std::string response = "HTTP/1.1 200 OK\r\n"
                     "Content-Length: 48\r\n"
                     "Content-Type: text/html\r\n"
@@ -42,19 +42,31 @@ void ConnectTest() {
   std::cout << "http connect starts" << std::endl;
   sock.Connect({"www.google.com.hk", 80});
   std::cout << sock.Send(req) << std::endl;
-  std::cout << sock.Recv() << std::endl;
+  char result[1024] = {};
+  std::string ret;
+  int received = 0;
+  while (true) {
+    received = sock.Recv(result, 1024);
+    std::cout << "read " << received << std::endl;
+    if (received < 1024) {
+      break;
+    }
+    ret.append(result, received);
+  }
+  std::cout << ret << std::endl;
 }
 
-void TLSConnectTest() {
-  TLSSocket sock;
-  std::cout << "https connect starts" << std::endl;
-  sock.Connect({"www.baidu.com", 443});
-  std::cout << sock.Send(req) << std::endl;
-  std::cout << sock.Recv() << std::endl;
-}
+// void TLSConnectTest() {
+//   TLSSocket sock;
+//   std::cout << "https connect starts" << std::endl;
+//   sock.Connect({"www.baidu.com", 443});
+//   std::cout << sock.Send(req) << std::endl;
+//   std::cout << sock.Recv() << std::endl;
+// }
 
 void HandleClient(Socket<Domain::IPV4, Protocol::TCP, Pattern::SYNC> client) {
-  auto recv = client.Recv();
+  char result[1024] = {};
+  auto recv = client.Recv(result, 1024);
   std::cout << recv << std::endl;
   std::cout << client.Send(response) << std::endl;
 }
@@ -71,38 +83,39 @@ void MoveTest(Acceptor<Domain::IPV4> acceptor) {
 void AcceptTest() {
   std::cout << "http accept starts" << std::endl;
   Acceptor<Domain::IPV4, Pattern::SYNC> acceptor;
-  acceptor.Bind({"localhost", 8083});
+  acceptor.SetOption(arc::net::SocketOption::REUSEADDR, 1);
+  acceptor.Bind({"localhost", 8084});
   acceptor.Listen();
   acceptor.SetNonBlocking(false);
   MoveTest(std::move(acceptor));
 }
 
-void TLSAcceptTest() {
-  std::cout << "https accept start" << std::endl;
-  TLSAcceptor acceptor("/home/minjun/data/keys/server.pem", "/home/minjun/data/keys/server.pem");
-  acceptor.Bind({"localhost", 8084});
-  acceptor.Listen();
-  acceptor.SetNonBlocking(false);
-  int cnt = 0;
-  while (cnt < 3) {
-    try {
-      auto new_sock = acceptor.Accept();
-      std::cout << new_sock.Recv() << std::endl;
-      std::cout << new_sock.Send(response.c_str(), response.size()) << std::endl;
-      new_sock.Shutdown();
-    } catch (const std::exception& e) {
-      std::cout << e.what() << std::endl;
-    }
-    cnt++;
-  }
-  std::cout << "here" << std::endl;
-}
+// void TLSAcceptTest() {
+//   std::cout << "https accept start" << std::endl;
+//   TLSAcceptor acceptor("/home/minjun/data/keys/server.pem", "/home/minjun/data/keys/server.pem");
+//   acceptor.Bind({"localhost", 8084});
+//   acceptor.Listen();
+//   acceptor.SetNonBlocking(false);
+//   int cnt = 0;
+//   while (cnt < 3) {
+//     try {
+//       auto new_sock = acceptor.Accept();
+//       std::cout << new_sock.Recv() << std::endl;
+//       std::cout << new_sock.Send(response.c_str(), response.size()) << std::endl;
+//       new_sock.Shutdown();
+//     } catch (const std::exception& e) {
+//       std::cout << e.what() << std::endl;
+//     }
+//     cnt++;
+//   }
+//   std::cout << "here" << std::endl;
+// }
 
 // int main() { AcceptTest(); }
 // int main() { 
 int main() {
-  // AcceptTest();
-  // ConnectTest();
+  AcceptTest();
+  ConnectTest();
   // TLSConnectTest();
-  TLSAcceptTest();
+  // TLSAcceptTest();
 }

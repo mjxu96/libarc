@@ -28,6 +28,7 @@
 
 #include <arc/coro/task.h>
 #include <arc/io/socket.h>
+#include <arc/io/tls_socket.h>
 #include <thread>
 
 using namespace arc::io;
@@ -57,14 +58,27 @@ void StartLongTimeJob() {
 
 Task<void> HandleClient(
     Socket<Domain::IPV4, Protocol::TCP, Pattern::ASYNC> sock) {
+  std::shared_ptr<char[]> data(new char[1024]);
   try {
-    while (true) {
-      auto recv = co_await sock.Recv();
-      if (recv.size() == 0) {
-        break;
+    std::string received;
+    bool connection_alive = true;
+    while (connection_alive) {
+      while (true) {
+        auto recv = co_await sock.Recv(data.get(), 1024);
+        received.append(data.get(), recv);
+        if (recv < 1024) {
+          if (recv == 0) {
+            connection_alive = false;
+          }
+          break;
+        }
       }
-      co_await sock.Send(ret.c_str(), ret.size());
+      // std::cout << received << std::endl;
+      if (connection_alive) {
+        co_await sock.Send(ret.c_str(), ret.size());
+      }
     }
+
   } catch (const std::exception& e) {
     std::cerr << e.what() << '\n';
   }
@@ -72,15 +86,26 @@ Task<void> HandleClient(
 
 Task<void> HandleClient(
     TLSSocket<Domain::IPV4, Pattern::ASYNC> sock) {
+  std::shared_ptr<char[]> data(new char[1024]);
   try {
-    while (true) {
-      auto recv = co_await sock.Recv();
-      if (recv.size() == 0) {
-        break;
+    std::string received;
+    bool connection_alive = true;
+    while (connection_alive) {
+      while (true) {
+        auto recv = co_await sock.Recv(data.get(), 1024);
+        received.append(data.get(), recv);
+        if (recv < 1024) {
+          if (recv == 0) {
+            connection_alive = false;
+          }
+          break;
+        }
       }
-      co_await sock.Send(ret.c_str(), ret.size());
+      // std::cout << received << std::endl;
+      if (connection_alive) {
+        co_await sock.Send(ret.c_str(), ret.size());
+      }
     }
-    // co_await sock.Shutdown();
   } catch (const std::exception& e) {
     std::cerr << e.what() << '\n';
   }
@@ -95,7 +120,7 @@ Task<void> Listen() {
   accpetor.Listen();
   std::cout << "http listen starts" << std::endl;
   int i = 0;
-  while (i < 2) {
+  while (i < 10000) {
     auto in_sock = co_await accpetor.Accept();
     arc::coro::EnsureFuture(HandleClient(std::move(in_sock)));
     i++;
@@ -115,7 +140,18 @@ Task<void> Connect() {
   std::cout << "before send" << std::endl;
   co_await client.Send(request.c_str(), request.size());
   std::cout << "after send" << std::endl;
-  std::cout << co_await client.Recv() << std::endl;
+
+  std::string received;
+  std::shared_ptr<char[]> data(new char[1024]);
+  while (true) {
+    auto recv = co_await client.Recv(data.get(), 1024);
+    std::cout << "received " << recv << std::endl;
+    if (recv < 1024) {
+      break;
+    }
+    received.append(data.get(), recv);
+  }
+  std::cout << received << std::endl;
   co_return;
 }
 
@@ -126,7 +162,18 @@ Task<void> TLSConnect() {
   std::cout << "before send" << std::endl;
   co_await tls_socket.Send(request.c_str(), request.size());
   std::cout << "after send" << std::endl;
-  std::cout << co_await tls_socket.Recv() << std::endl;
+
+  std::string received;
+  std::shared_ptr<char[]> data(new char[1024]);
+  while (true) {
+    auto recv = co_await tls_socket.Recv(data.get(), 1024);
+    std::cout << "received " << recv << std::endl;
+    if (recv < 1024) {
+      break;
+    }
+    received.append(data.get(), recv);
+  }
+  std::cout << received << std::endl;
   co_return;
 }
 
@@ -178,12 +225,12 @@ void DispatchHttpStart(int thread_num) {
 
 void Start() { StartEventLoop(Listen()); }
 
-void TLSStart() { StartEventLoop(TLSAccept()); }
+// void TLSStart() { StartEventLoop(TLSAccept()); }
 
 int main(int argc, char** argv) {
   // StartEventLoop(Connect());
   // std::vector<std::thread> threads;
-  int thread_num = std::stoi(std::string(argv[1]));
+  // int thread_num = std::stoi(std::string(argv[1]));
   // for (int i = 0; i < thread_num; i++) {
   //   threads.emplace_back(TLSStart);
   // }
@@ -191,10 +238,10 @@ int main(int argc, char** argv) {
   // for (int i = 0; i < thread_num; i++) {
   //   threads[i].join();
   // }
-  DispatchHttpStart(thread_num);
+  // DispatchHttpStart(thread_num);
 
-  std::cout << "finished" << std::endl;
-  // StartEventLoop(TLSAccept());
+  // std::cout << "finished" << std::endl;
+  StartEventLoop(TLSAccept());
   // StartEventLoop(TLSConnect());
   // StartEventLoop(Listen());
   // StartEventLoop(Connect());

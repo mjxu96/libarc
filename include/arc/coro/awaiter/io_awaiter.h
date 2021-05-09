@@ -39,85 +39,36 @@
 namespace arc {
 namespace coro {
 
-template <typename ReadyFunctorRetType, typename ResumeFunctorRetType,
-          io::IOType T>
+template <typename ReadyFunctor, typename ResumeFunctor>
 class [[nodiscard]] IOAwaiter {
  public:
-  IOAwaiter(std::function<ReadyFunctorRetType()>&& ready_functor,
-            std::function<ResumeFunctorRetType()>&& resume_functor, int fd)
-      : ready_functor_(std::move(ready_functor)),
-        resume_functor_(std::move(resume_functor)),
-        fd_(fd) {}
+  IOAwaiter(ReadyFunctor&& ready_functor,
+            ResumeFunctor&& resume_functor, int fd, io::IOType io_type)
+      : ready_functor_(std::forward<ReadyFunctor>(ready_functor)),
+        resume_functor_(std::forward<ResumeFunctor>(resume_functor)),
+        fd_(fd), io_type_(io_type) {}
 
-  template <io::IOType UT = T>
-  requires(UT == io::IOType::ACCEPT) bool await_ready() {
+
+  bool await_ready() {
     return ready_functor_();
   }
 
-  template <io::IOType UT = T>
-  requires(UT == io::IOType::CONNECT) bool await_ready() {
-    if (ready_functor_()) {
-      return true;
-    } else {
-      if (errno == EINPROGRESS) {
-        return false;
-      }
-    }
-    throw arc::exception::IOException("Connection Error");
-  }
-
-  template <io::IOType UT = T>
-  requires(UT == io::IOType::WRITE) bool await_ready() {
-    written_size_ = ready_functor_();
-    if (written_size_ < 0) {
-      if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        return false;
-      }
-      throw arc::exception::IOException("Send Error");
-    }
-    return true;
-  }
-
-  template <io::IOType UT = T>
-  requires(UT == io::IOType::READ) bool await_ready() {
-    return false;
+  typename std::invoke_result_t<ResumeFunctor> await_resume() {
+    return resume_functor_();
   }
 
   template <arc::concepts::PromiseT PromiseType>
   void await_suspend(std::coroutine_handle<PromiseType> handle) {
     GetLocalEventLoop().AddIOEvent(
-        new events::detail::IOEventBase(fd_, T, handle));
-  }
-
-  template <io::IOType UT = T>
-  requires(UT == io::IOType::ACCEPT) ResumeFunctorRetType await_resume() {
-    return resume_functor_();
-  }
-
-  template <io::IOType UT = T>
-  requires(UT == io::IOType::CONNECT) ResumeFunctorRetType await_resume() {
-    return;
-  }
-
-  template <io::IOType UT = T>
-  requires(UT == io::IOType::READ) ResumeFunctorRetType await_resume() {
-    return resume_functor_();
-  }
-
-  template <io::IOType UT = T>
-  requires(UT == io::IOType::WRITE) ResumeFunctorRetType await_resume() {
-    if (written_size_ >= 0) [[likely]] {
-      return written_size_;
-    }
-    return resume_functor_();
+        new events::detail::IOEventBase(fd_, io_type_, handle));
   }
 
  private:
-  int written_size_{0};
+  io::IOType io_type_;
   int fd_;
 
-  std::function<ResumeFunctorRetType()> resume_functor_;
-  std::function<ReadyFunctorRetType()> ready_functor_;
+  ResumeFunctor resume_functor_;
+  ReadyFunctor ready_functor_;
 };
 
 }  // namespace coro

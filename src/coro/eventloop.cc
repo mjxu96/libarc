@@ -45,6 +45,7 @@ bool EventLoop::IsDone() {
 }
 
 void EventLoop::Do() {
+
   if (type_ == EventLoopType::CONSUMER) [[likely]] {
     ConsumeCoroutine();
   } else if (type_ == EventLoopType::PRODUCER) [[unlikely]] {
@@ -82,11 +83,13 @@ void EventLoop::Do() {
       throw arc::exception::IOException();
     }
   }
+
   // currently we enforce this constraint
   // in future we will remove this one
   assert(todo_cnt == event_cnt);
 
   for (int i = 0; i < todo_cnt; i++) {
+    // TODO move this one
     RemoveIOEvent(todo_events[i]);
     todo_events[i]->Resume();
   }
@@ -126,7 +129,7 @@ void EventLoop::AddIOEvent(events::detail::IOEventBase* event, bool replace) {
 
     int op = (prev_events == 0 ? EPOLL_CTL_ADD : EPOLL_CTL_MOD);
     epoll_event e_event{};
-    e_event.events = prev_events | should_add_event | EPOLLET;
+    e_event.events = prev_events | should_add_event;
     e_event.data.fd = target_fd;
 
     int epoll_ret = epoll_ctl(fd_, op, target_fd, &e_event);
@@ -187,7 +190,7 @@ void EventLoop::RemoveIOEvent(events::detail::IOEventBase* event) {
     epoll_ret = epoll_ctl(fd_, op, target_fd, nullptr);
   } else {
     epoll_event e_event{};
-    e_event.events = after_io_events | EPOLLET;
+    e_event.events = after_io_events;
     e_event.data.fd = target_fd;
     epoll_ret = epoll_ctl(fd_, op, target_fd, &e_event);
   }
