@@ -50,13 +50,13 @@ class [[nodiscard]] TimeAwaiter {
 
   template <arc::concepts::PromiseT PromiseType>
   void await_suspend(std::coroutine_handle<PromiseType> handle) {
-    events::detail::GetLocalAsyncTimerController().AddWakeupTimePoint(
-        next_wakeup_time_, handle);
+    events::GetLocalAsyncTimerController().AddWakeupTimePoint(next_wakeup_time_,
+                                                              handle);
   }
 
   void await_resume() {
-    events::detail::GetLocalAsyncTimerController().PopFirstTimePoint();
-    events::detail::GetLocalAsyncTimerController().FireNextAvailableTimePoint();
+    events::GetLocalAsyncTimerController().PopFirstTimePoint();
+    events::GetLocalAsyncTimerController().FireNextAvailableTimePoint();
   }
 
  private:

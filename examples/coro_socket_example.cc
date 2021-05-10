@@ -47,7 +47,7 @@ const std::string ret =
 
 Task<void> LongTimeJob() {
   std::cout << "start of long time job" << std::endl;
-  co_await SleepFor(std::chrono::seconds(86400));
+  co_await SleepFor(std::chrono::seconds(5));
   std::cout << "end of long time job" << std::endl;
 }
 
@@ -84,8 +84,7 @@ Task<void> HandleClient(
   }
 }
 
-Task<void> HandleClient(
-    TLSSocket<Domain::IPV4, Pattern::ASYNC> sock) {
+Task<void> HandleClient(TLSSocket<Domain::IPV4, Pattern::ASYNC> sock) {
   std::shared_ptr<char[]> data(new char[1024]);
   try {
     std::string received;
@@ -120,7 +119,7 @@ Task<void> Listen() {
   accpetor.Listen();
   std::cout << "http listen starts" << std::endl;
   int i = 0;
-  while (i < 100000) {
+  while (i < 2) {
     auto in_sock = co_await accpetor.Accept();
     arc::coro::EnsureFuture(HandleClient(std::move(in_sock)));
     i++;
@@ -178,7 +177,8 @@ Task<void> TLSConnect() {
 }
 
 Task<void> TLSAccept() {
-  TLSAcceptor<Domain::IPV4, Pattern::ASYNC> accpetor("/home/minjun/data/keys/server.pem", "/home/minjun/data/keys/server.pem");
+  TLSAcceptor<Domain::IPV4, Pattern::ASYNC> accpetor(
+      "/home/minjun/data/keys/server.pem", "/home/minjun/data/keys/server.pem");
   std::cout << "acceptor fd: " << accpetor.GetFd() << std::endl;
   accpetor.SetOption(arc::net::SocketOption::REUSEADDR, 1);
   accpetor.SetOption(arc::net::SocketOption::REUSEPORT, 1);
@@ -189,12 +189,15 @@ Task<void> TLSAccept() {
   while (i < 2) {
     auto in_sock = co_await accpetor.Accept();
     EnsureFuture(HandleClient(std::move(in_sock)));
+    i++;
   }
 }
 
 Task<void> DispatchAccept(int thread_num) {
   Acceptor<Domain::IPV4, Pattern::ASYNC> accpetor;
-  // TLSAcceptor<Domain::IPV4, Pattern::ASYNC> accpetor("/home/minjun/data/keys/server.pem", "/home/minjun/data/keys/server.pem");
+  // TLSAcceptor<Domain::IPV4, Pattern::ASYNC>
+  // accpetor("/home/minjun/data/keys/server.pem",
+  // "/home/minjun/data/keys/server.pem");
   std::cout << "acceptor fd: " << accpetor.GetFd() << std::endl;
   accpetor.SetOption(arc::net::SocketOption::REUSEADDR, 1);
   uint16_t port = 8086;
@@ -211,6 +214,7 @@ Task<void> DispatchAccept(int thread_num) {
     auto in_sock = co_await accpetor.Accept();
     // std::cout << "accepted one client" << std::endl;
     arc::coro::GetLocalEventLoop().Dispatch(HandleClient(std::move(in_sock)));
+    i++;
   }
   co_await SleepFor(std::chrono::seconds(1));
   for (int i = 0; i < thread_num; i++) {
@@ -240,9 +244,9 @@ int main(int argc, char** argv) {
   // }
   // DispatchHttpStart(thread_num);
 
-  // std::cout << "finished" << std::endl;
-  // StartEventLoop(TLSAccept());
+  std::cout << "finished" << std::endl;
+  StartEventLoop(Connect());
   StartEventLoop(TLSConnect());
   StartEventLoop(Listen());
-  // StartEventLoop(Connect());
+  StartEventLoop(TLSAccept());
 }

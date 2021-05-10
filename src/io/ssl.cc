@@ -139,9 +139,9 @@ std::string SSLContext::GetSSLError() {
 }
 
 SSLContext& arc::io::GetLocalSSLContext(TLSProtocol protocol,
-                                         TLSProtocolType type) {
-  thread_local static std::unordered_map<TLSProtocol,
-                            std::unordered_map<TLSProtocolType, SSLContext>>
+                                        TLSProtocolType type) {
+  thread_local static std::unordered_map<
+      TLSProtocol, std::unordered_map<TLSProtocolType, SSLContext>>
       global_contexts;
   if (global_contexts.find(protocol) == global_contexts.end()) {
     global_contexts[protocol] =

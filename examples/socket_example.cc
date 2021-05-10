@@ -30,12 +30,14 @@
 using namespace arc::io;
 using namespace arc::net;
 
-std::string req = "GET / HTTP/1.1\r\nHost: www.google.com\r\nConnection: keep-alive\r\n\r\n";
-std::string response = "HTTP/1.1 200 OK\r\n"
-                    "Content-Length: 48\r\n"
-                    "Content-Type: text/html\r\n"
-                    "Connection: Closed\r\n\r\n"
-                    "<html><body><h1>Hello, World!</h1></body></html>";
+std::string req =
+    "GET / HTTP/1.1\r\nHost: www.google.com\r\nConnection: keep-alive\r\n\r\n";
+std::string response =
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Length: 48\r\n"
+    "Content-Type: text/html\r\n"
+    "Connection: Closed\r\n\r\n"
+    "<html><body><h1>Hello, World!</h1></body></html>";
 
 void ConnectTest() {
   Socket sock;
@@ -92,8 +94,8 @@ void AcceptTest() {
 
 // void TLSAcceptTest() {
 //   std::cout << "https accept start" << std::endl;
-//   TLSAcceptor acceptor("/home/minjun/data/keys/server.pem", "/home/minjun/data/keys/server.pem");
-//   acceptor.Bind({"localhost", 8084});
+//   TLSAcceptor acceptor("/home/minjun/data/keys/server.pem",
+//   "/home/minjun/data/keys/server.pem"); acceptor.Bind({"localhost", 8084});
 //   acceptor.Listen();
 //   acceptor.SetNonBlocking(false);
 //   int cnt = 0;
@@ -101,8 +103,8 @@ void AcceptTest() {
 //     try {
 //       auto new_sock = acceptor.Accept();
 //       std::cout << new_sock.Recv() << std::endl;
-//       std::cout << new_sock.Send(response.c_str(), response.size()) << std::endl;
-//       new_sock.Shutdown();
+//       std::cout << new_sock.Send(response.c_str(), response.size()) <<
+//       std::endl; new_sock.Shutdown();
 //     } catch (const std::exception& e) {
 //       std::cout << e.what() << std::endl;
 //     }
@@ -112,7 +114,7 @@ void AcceptTest() {
 // }
 
 // int main() { AcceptTest(); }
-// int main() { 
+// int main() {
 int main() {
   AcceptTest();
   ConnectTest();

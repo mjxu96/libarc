@@ -1,7 +1,7 @@
 /*
  * File: io_event.h
  * Project: libarc
- * File Created: Sunday, 13th December 2020 4:03:22 pm
+ * File Created: Saturday, 12th December 2020 11:05:14 am
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
@@ -29,13 +29,37 @@
 #ifndef LIBARC__CORO__EVENTS__IO_EVENT_H
 #define LIBARC__CORO__EVENTS__IO_EVENT_H
 
-#include "io_event_base.h"
+#include <arc/coro/events/event_base.h>
+#include <arc/io/utils.h>
+#include <assert.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 namespace arc {
 namespace events {
 
-template <io::IOType E>
-class IOEvent : detail::IOEventBase {};
+class IOEvent : public EventBase {
+ public:
+  IOEvent(int fd, io::IOType io_type, std::coroutine_handle<void> handle)
+      : EventBase(handle), fd_(fd), io_type_(io_type) {
+    if (io_type == io::IOType::READ) {
+      io_event_type_ = io::IOType::READ;
+    } else {
+      io_event_type_ = io::IOType::WRITE;
+    }
+  }
+
+  virtual ~IOEvent() {}
+
+  inline int GetFd() const noexcept { return fd_; }
+  inline io::IOType GetIOEventType() const noexcept { return io_event_type_; }
+  inline io::IOType GetIOType() const noexcept { return io_type_; }
+
+ protected:
+  int fd_{-1};
+  io::IOType io_type_{};
+  io::IOType io_event_type_{};
+};
 
 }  // namespace events
 }  // namespace arc

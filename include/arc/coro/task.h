@@ -31,8 +31,8 @@
 
 // TODO add support for clang
 #include <arc/concept/coro.h>
-#include <arc/coro/eventloop.h>
 #include <arc/coro/awaiter/time_awaiter.h>
+#include <arc/coro/eventloop.h>
 #include <unistd.h>
 
 #ifdef __clang__
@@ -219,11 +219,11 @@ class [[nodiscard]] Task {
  public:
   using promise_type = TaskPromise<T>;
 
-  Task(promise_type* promise)
+  Task(promise_type * promise)
       : coroutine_(
             std::coroutine_handle<promise_type>::from_promise(*promise)) {}
 
-  Task(Task&& other) : coroutine_(other.coroutine_) {
+  Task(Task && other) : coroutine_(other.coroutine_) {
     other.coroutine_ = nullptr;
   }
 
@@ -257,13 +257,9 @@ class [[nodiscard]] Task {
     coroutine_.resume();
   }
 
-  std::coroutine_handle<void> GetCoroutine() const {
-    return coroutine_;
-  }
+  std::coroutine_handle<void> GetCoroutine() const { return coroutine_; }
 
-  void SetNeedClean(bool need_clean = false) {
-    need_clean_ = need_clean;
-  }
+  void SetNeedClean(bool need_clean = false) { need_clean_ = need_clean; }
 
   bool await_ready() { return (!coroutine_ || coroutine_.done()); }
   std::coroutine_handle<> await_suspend(std::coroutine_handle<> continuation) {

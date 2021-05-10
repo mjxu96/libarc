@@ -34,7 +34,6 @@
 namespace arc {
 namespace coro {
 
-
 template <typename T>
 class DispatcherBase {
  public:
@@ -42,13 +41,9 @@ class DispatcherBase {
       : queue_(capacity, producer_count, 0), producer_count_(producer_count) {}
   virtual ~DispatcherBase() = default;
 
-  virtual bool Deque(T&& element) {
-    return queue_.try_dequeue(element);
-  }
+  virtual bool Deque(T&& element) { return queue_.try_dequeue(element); }
 
-  virtual bool Enqueue(T&& element) {
-    return queue_.try_enqueue(element);
-  }
+  virtual bool Enqueue(T&& element) { return queue_.try_enqueue(element); }
 
  protected:
   moodycamel::ConcurrentQueue<T> queue_;
@@ -58,7 +53,8 @@ class DispatcherBase {
 template <typename T>
 class EventDispatcher : public DispatcherBase<T> {
  public:
-  EventDispatcher(std::size_t capacity) : DispatcherBase<T>(capacity, 1), token_(this->queue_) {}
+  EventDispatcher(std::size_t capacity)
+      : DispatcherBase<T>(capacity, 1), token_(this->queue_) {}
   virtual bool Deque(T&& element) override {
     assert(is_produer_registered_);
     return this->queue_.try_dequeue_from_producer(token_, element);
@@ -69,13 +65,13 @@ class EventDispatcher : public DispatcherBase<T> {
     return this->queue_.try_enqueue(token_, element);
   }
 
-  template<typename It>
+  template <typename It>
   bool EnqueueBulk(It it, int count) {
     assert(is_produer_registered_);
     return this->queue_.try_enqueue_bulk(token_, it, count);
   }
 
-  template<typename It>
+  template <typename It>
   std::size_t DequeueBulk(It it, int count) {
     assert(is_produer_registered_);
     return this->queue_.try_dequeue_bulk_from_producer(token_, it, count);
@@ -91,7 +87,7 @@ class EventDispatcher : public DispatcherBase<T> {
   bool is_produer_registered_{false};
 };
 
-template<typename T>
+template <typename T>
 EventDispatcher<T>& GetGlobalEventDispatcher();
 
 }  // namespace coro

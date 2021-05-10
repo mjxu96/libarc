@@ -30,8 +30,8 @@
 #define LIBARC__UTILS__BITS_H
 
 #include <bitset>
-#include <type_traits>
 #include <cassert>
+#include <type_traits>
 
 namespace arc {
 namespace utils {

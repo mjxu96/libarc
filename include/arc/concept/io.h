@@ -30,15 +30,16 @@
 #define LIBARC__CONCEPT__IO_H
 
 #include <concepts>
-#include <type_traits>
 #include <string>
+#include <type_traits>
 
 namespace arc {
 namespace concepts {
 
 template <typename T>
-concept Writable = (std::is_convertible_v<T, std::string>) || (std::is_convertible_v<T, std::wstring>);
-}  // namespace concept
+concept Writable = (std::is_convertible_v<T, std::string>) ||
+                   (std::is_convertible_v<T, std::wstring>);
+}  // namespace concepts
 }  // namespace arc
 
 #endif

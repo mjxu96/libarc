@@ -28,8 +28,7 @@
 
 #include <arc/coro/events/time_event.h>
 
-arc::events::detail::AsyncTimerController&
-arc::events::detail::GetLocalAsyncTimerController() {
-  thread_local static arc::events::detail::AsyncTimerController controller;
+arc::events::AsyncTimerController& arc::events::GetLocalAsyncTimerController() {
+  thread_local static arc::events::AsyncTimerController controller;
   return controller;
 }

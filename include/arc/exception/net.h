@@ -40,8 +40,8 @@ class AddressException : public detail::ErrnoException {
   AddressException(const std::string& msg = "");
 #else
   AddressException(const std::string& msg = "",
-               const std::experimental::source_location& source_location =
-                   std::experimental::source_location::current());
+                   const std::experimental::source_location& source_location =
+                       std::experimental::source_location::current());
 #endif
 };
 

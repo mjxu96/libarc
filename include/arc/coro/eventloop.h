@@ -29,13 +29,13 @@
 #ifndef LIBARC__CORO__EVENTLOOP_H
 #define LIBARC__CORO__EVENTLOOP_H
 
-#include <arc/coro/events/io_event_base.h>
+#include <arc/concept/coro.h>
+#include <arc/coro/dispatcher.h>
+#include <arc/coro/events/io_event.h>
 #include <arc/io/io_base.h>
 #include <arc/utils/bits.h>
 #include <assert.h>
 #include <sys/epoll.h>
-#include <arc/concept/coro.h>
-#include <arc/coro/dispatcher.h>
 
 #ifdef __linux__
 #include <arc/coro/poller/epoll.h>
@@ -65,7 +65,7 @@ enum class EventLoopType {
 };
 
 template <arc::concepts::CopyableMoveableOrVoid T>
-class [[nodiscard]] Task;
+class[[nodiscard]] Task;
 
 class EventLoop {
  public:
@@ -75,13 +75,11 @@ class EventLoop {
   bool IsDone();
   void Do();
 
-  inline void AddIOEvent(events::detail::IOEventBase* event, bool replace = false) {
+  inline void AddIOEvent(events::IOEvent* event, bool replace = false) {
     poller_->AddIOEvent(event, replace);
   }
 
-  inline void RemoveAllIOEvents(int fd) {
-    poller_->RemoveAllIOEvents(fd);
-  }
+  inline void RemoveAllIOEvents(int fd) { poller_->RemoveAllIOEvents(fd); }
 
   void AddToCleanUpCoroutine(std::coroutine_handle<> handle);
 
@@ -98,8 +96,7 @@ class EventLoop {
   const static int kMaxConsumableCoroutineNum_ = 4;
 
   // poller related
-  events::detail::IOEventBase* todo_events_[2 * kMaxEventsSizePerWait_] = {
-      nullptr};
+  events::IOEvent* todo_events_[2 * kMaxEventsSizePerWait_] = {nullptr};
 
   std::vector<std::coroutine_handle<>> to_clean_up_handles_{};
   std::vector<std::coroutine_handle<>> to_dispatched_coroutines_{};

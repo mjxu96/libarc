@@ -6,17 +6,17 @@
  * -----
  * MIT License
  * Copyright (c) 2020 Minjun Xu
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
  * deal in the Software without restriction, including without limitation the
  * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
  * sell copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -26,7 +26,6 @@
  * IN THE SOFTWARE.
  */
 
-
 #ifndef LIBARC__IO__TLS_SOCKET_H
 #define LIBARC__IO__TLS_SOCKET_H
 
@@ -34,7 +33,6 @@
 
 namespace arc {
 namespace io {
-
 
 template <net::Domain AF = net::Domain::IPV4, Pattern PP = Pattern::SYNC>
 class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
@@ -137,15 +135,22 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::ASYNC) coro::Task<ssize_t> Recv(char* buf, int max_recv_bytes) {
+  requires(UPP == Pattern::ASYNC) coro::Task<ssize_t> Recv(char* buf,
+                                                           int max_recv_bytes) {
     while (true) {
       ssize_t ret = SSL_read(ssl_.ssl, buf, RECV_BUFFER_SIZE);
       if (ret <= 0) {
         int err = SSL_get_error(ssl_.ssl, ret);
         if (err == SSL_ERROR_WANT_READ) {
-          co_await coro::TLSIOAwaiter(this->fd_, arc::io::IOType::READ);
+          co_await coro::IOAwaiter(
+              std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
+              this->fd_, arc::io::IOType::READ);
         } else if (err == SSL_ERROR_WANT_WRITE) {
-          co_await coro::TLSIOAwaiter(this->fd_, arc::io::IOType::WRITE);
+          co_await coro::IOAwaiter(
+              std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
+              this->fd_, arc::io::IOType::WRITE);
         } else if (err == SSL_ERROR_ZERO_RETURN) {
           co_return 0;
         } else if (err == SSL_ERROR_SYSCALL && errno == 0) {
@@ -175,12 +180,18 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
         int err = SSL_get_error(ssl_.ssl, ret);
         if (err == SSL_ERROR_WANT_READ) {
           if (!is_data_read) {
-            co_await coro::TLSIOAwaiter(this->fd_, arc::io::IOType::READ);
+            co_await coro::IOAwaiter(
+                std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
+                std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
+                this->fd_, arc::io::IOType::READ);
           } else {
             break;
           }
         } else if (err == SSL_ERROR_WANT_WRITE) {
-          co_await coro::TLSIOAwaiter(this->fd_, arc::io::IOType::WRITE);
+          co_await coro::IOAwaiter(
+              std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
+              this->fd_, arc::io::IOType::WRITE);
         } else if (err == SSL_ERROR_ZERO_RETURN) {
           // no data, we exit
           break;
@@ -214,16 +225,25 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   template <Pattern UPP = PP>
   requires(UPP == Pattern::ASYNC) coro::Task<int> Send(const void* data,
                                                        int num) {
-    co_await coro::TLSIOAwaiter(this->fd_, arc::io::IOType::WRITE);
+    co_await coro::IOAwaiter(
+        std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
+        std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this), this->fd_,
+        arc::io::IOType::WRITE);
     int ret = -1;
     do {
       ret = SSL_write(ssl_.ssl, data, num);
       if (ret < 0) {
         int err = SSL_get_error(ssl_.ssl, ret);
         if (err == SSL_ERROR_WANT_READ) {
-          co_await coro::TLSIOAwaiter(this->fd_, arc::io::IOType::READ);
+          co_await coro::IOAwaiter(
+              std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
+              this->fd_, arc::io::IOType::READ);
         } else if (err == SSL_ERROR_WANT_WRITE) {
-          co_await coro::TLSIOAwaiter(this->fd_, arc::io::IOType::WRITE);
+          co_await coro::IOAwaiter(
+              std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
+              this->fd_, arc::io::IOType::WRITE);
         } else {
           throw exception::TLSException("Write Error", err);
         }
@@ -252,9 +272,15 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
     while ((r = HandShake()) != 1) {
       int err = SSL_get_error(ssl_.ssl, r);
       if (err == SSL_ERROR_WANT_WRITE) {
-        co_await arc::coro::TLSIOAwaiter(this->fd_, arc::io::IOType::WRITE);
+        co_await arc::coro::IOAwaiter(
+            std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
+            std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this), this->fd_,
+            arc::io::IOType::WRITE);
       } else if (err == SSL_ERROR_WANT_READ) {
-        co_await arc::coro::TLSIOAwaiter(this->fd_, arc::io::IOType::READ);
+        co_await arc::coro::IOAwaiter(
+            std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
+            std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this), this->fd_,
+            arc::io::IOType::READ);
       } else {
         throw arc::exception::TLSException("Connection Error");
       }
@@ -300,9 +326,15 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
       } else {
         int err = SSL_get_error(ssl_.ssl, ret);
         if (err == SSL_ERROR_WANT_WRITE) {
-          co_await arc::coro::TLSIOAwaiter(this->fd_, arc::io::IOType::WRITE);
+          co_await arc::coro::IOAwaiter(
+              std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
+              this->fd_, arc::io::IOType::WRITE);
         } else if (err == SSL_ERROR_WANT_READ) {
-          co_await arc::coro::TLSIOAwaiter(this->fd_, arc::io::IOType::READ);
+          co_await arc::coro::IOAwaiter(
+              std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
+              this->fd_, arc::io::IOType::READ);
         } else if (err == SSL_ERROR_SYSCALL && errno == 0) {
           break;
         } else {
@@ -320,6 +352,9 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   int HandShake() { return SSL_do_handshake(ssl_.ssl); }
 
  protected:
+  bool TLSIOReadyFunctor() { return false; }
+  void TLSIOResumeFunctor() { return; }
+
   void BindFdWithSSL() { SSL_set_fd(ssl_.ssl, this->fd_); }
 
   io::SSLContext* context_ptr_{nullptr};
@@ -327,7 +362,6 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   TLSProtocol protocol_;
   TLSProtocolType type_;
 };
-
 
 template <net::Domain AF = net::Domain::IPV4, Pattern PP = Pattern::SYNC>
 class TLSAcceptor : public TLSSocket<AF, PP>, public Acceptor<AF, PP> {
@@ -378,15 +412,22 @@ class TLSAcceptor : public TLSSocket<AF, PP>, public Acceptor<AF, PP> {
                                  this->protocol_, this->type_);
     tls_socket.SetAcceptState();
     int r = 0;
-    co_await arc::coro::TLSIOAwaiter(tls_socket.GetFd(), arc::io::IOType::READ);
+    co_await arc::coro::IOAwaiter(
+        std::bind(&TLSAcceptor<AF, PP>::TLSIOReadyFunctor, this),
+        std::bind(&TLSAcceptor<AF, PP>::TLSIOResumeFunctor, this),
+        tls_socket.GetFd(), arc::io::IOType::READ);
     while ((r = tls_socket.HandShake()) != 1) {
       int err = SSL_get_error(tls_socket.GetSSLObject().ssl, r);
       if (err == SSL_ERROR_WANT_WRITE) {
-        co_await arc::coro::TLSIOAwaiter(tls_socket.GetFd(),
-                                         arc::io::IOType::WRITE);
+        co_await arc::coro::IOAwaiter(
+            std::bind(&TLSAcceptor<AF, PP>::TLSIOReadyFunctor, this),
+            std::bind(&TLSAcceptor<AF, PP>::TLSIOResumeFunctor, this),
+            tls_socket.GetFd(), arc::io::IOType::WRITE);
       } else if (err == SSL_ERROR_WANT_READ) {
-        co_await arc::coro::TLSIOAwaiter(tls_socket.GetFd(),
-                                         arc::io::IOType::READ);
+        co_await arc::coro::IOAwaiter(
+            std::bind(&TLSAcceptor<AF, PP>::TLSIOReadyFunctor, this),
+            std::bind(&TLSAcceptor<AF, PP>::TLSIOResumeFunctor, this),
+            tls_socket.GetFd(), arc::io::IOType::READ);
       } else if (err == SSL_ERROR_SYSCALL && errno == 0) {
         break;
       } else {
@@ -397,6 +438,9 @@ class TLSAcceptor : public TLSSocket<AF, PP>, public Acceptor<AF, PP> {
   }
 
  private:
+  bool TLSIOReadyFunctor() { return false; }
+  void TLSIOResumeFunctor() { return; }
+
   void LoadCertificateAndKey(const std::string& cert_file,
                              const std::string& key_file) {
     this->context_ptr_->SetCertificateAndKey(cert_file, key_file);
@@ -406,11 +450,8 @@ class TLSAcceptor : public TLSSocket<AF, PP>, public Acceptor<AF, PP> {
   std::string key_file_;
 };
 
-  
-} // namespace io
+}  // namespace io
 
-  
-} // namespace arc
-
+}  // namespace arc
 
 #endif

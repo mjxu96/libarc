@@ -32,8 +32,8 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-#include <arc/utils/nameof.hpp>
 #include <arc/exception/net.h>
+#include <arc/utils/nameof.hpp>
 #include <cassert>
 #include <cstring>
 #include <stdexcept>
@@ -68,7 +68,8 @@ class Address {
         InitDnsAddress(host, port);
       }
     } else {
-      throw arc::exception::AddressException("Address family cannot be supported");
+      throw arc::exception::AddressException(
+          "Address family cannot be supported");
     }
   }
 
@@ -99,12 +100,12 @@ class Address {
 
   void Init(const CAddressType& addr, bool is_from_dns = false) {
     if (((int)AF) != ((sockaddr*)&addr)->sa_family) {
-      throw arc::exception::AddressException("Trying to attch a " +
-                             std::string(nameof::nameof_enum<Domain>(
-                                 (Domain)((sockaddr*)&addr)->sa_family)) +
-                             " address with a " +
-                             std::string(nameof::nameof_enum<Domain>(AF)) +
-                             " address");
+      throw arc::exception::AddressException(
+          "Trying to attch a " +
+          std::string(nameof::nameof_enum<Domain>(
+              (Domain)((sockaddr*)&addr)->sa_family)) +
+          " address with a " + std::string(nameof::nameof_enum<Domain>(AF)) +
+          " address");
     }
     addr_ = addr;
     char tmp[INET6_ADDRSTRLEN];
@@ -148,9 +149,9 @@ class Address {
       freeaddrinfo(result);
     } else {
       freeaddrinfo(result);
-      throw arc::exception::AddressException("Cannot resolve " + host + ":" +
-                             std::to_string(port) + " to address family " +
-                             std::string(nameof::nameof_enum<AF>()));
+      throw arc::exception::AddressException(
+          "Cannot resolve " + host + ":" + std::to_string(port) +
+          " to address family " + std::string(nameof::nameof_enum<AF>()));
     }
   }
 

@@ -105,8 +105,11 @@ Task<void> SleepTime(int seconds) {
   std::cout << "before sleep for " << seconds << std::endl;
   auto now = std::chrono::system_clock::now();
   co_await SleepFor(std::chrono::seconds(seconds));
-  auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - now).count();
-  std::cout << "after sleep for " << seconds << " actually slept for " << elapsed << std::endl;
+  auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                     std::chrono::system_clock::now() - now)
+                     .count();
+  std::cout << "after sleep for " << seconds << " actually slept for "
+            << elapsed << std::endl;
 }
 
 Task<void> MultipleTimers(int num) {
@@ -115,8 +118,6 @@ Task<void> MultipleTimers(int num) {
   }
   co_return;
 }
-
-
 
 int main(int argc, char** argv) {
   std::cout << "arc version: " << arc::Version() << std::endl;

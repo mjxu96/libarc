@@ -32,7 +32,8 @@ using namespace arc::exception;
 using namespace arc::exception::detail;
 
 #ifdef __clang__
-AddressException::AddressException(const std::string& msg) : ErrnoException(msg) {
+AddressException::AddressException(const std::string& msg)
+    : ErrnoException(msg) {
 #else
 AddressException::AddressException(
     const std::string& msg,

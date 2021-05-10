@@ -29,8 +29,8 @@
 #ifndef LIBARC__EXCEPTION__IO_H
 #define LIBARC__EXCEPTION__IO_H
 
-#include "base.h"
 #include <openssl/ssl.h>
+#include "base.h"
 
 namespace arc {
 namespace exception {

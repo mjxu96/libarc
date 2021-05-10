@@ -31,7 +31,7 @@
 
 #ifdef __linux__
 
-#include <arc/coro/events/io_event_base.h>
+#include <arc/coro/events/io_event.h>
 #include <arc/io/io_base.h>
 #include <sys/epoll.h>
 
@@ -49,14 +49,16 @@ class Poller : public io::detail::IOBase {
   Poller();
   ~Poller() = default;
 
-  void AddIOEvent(events::detail::IOEventBase* event, bool replace = false);
+  void AddIOEvent(events::IOEvent* event, bool replace = false);
   void RemoveAllIOEvents(int target_fd);
 
-  int WaitIOEvents(events::detail::IOEventBase** todo_events, int timeout = 1);
+  int WaitIOEvents(events::IOEvent** todo_events, int timeout = 1);
   void TrimIOEvents();
 
   inline int RemainedEvents() const { return total_events_; }
-  constexpr inline int MaxEventsPerWait() const { return kMaxEventsSizePerWait_; }
+  constexpr inline int MaxEventsPerWait() const {
+    return kMaxEventsSizePerWait_;
+  }
 
  private:
   const static int kMaxEventsSizePerWait_ = 1024;
@@ -67,12 +69,12 @@ class Poller : public io::detail::IOBase {
   std::unordered_set<int> interesting_fds_{};
 
   // {fd -> {io_type -> [events]}}
-  std::vector<std::vector<std::deque<events::detail::IOEventBase*>>> io_events_{
-      kMaxFdInArray_, std::vector<std::deque<events::detail::IOEventBase*>>{
-                          2, std::deque<events::detail::IOEventBase*>{}}};
+  std::vector<std::vector<std::deque<events::IOEvent*>>> io_events_{
+      kMaxFdInArray_, std::vector<std::deque<events::IOEvent*>>{
+                          2, std::deque<events::IOEvent*>{}}};
   int io_prev_events_[kMaxFdInArray_] = {0};
 
-  std::unordered_map<int, std::vector<std::deque<events::detail::IOEventBase*>>>
+  std::unordered_map<int, std::vector<std::deque<events::IOEvent*>>>
       extra_io_events_{};
   std::unordered_map<int, int> extra_io_prev_events_{};
 
@@ -80,8 +82,7 @@ class Poller : public io::detail::IOBase {
   epoll_event events_[kMaxEventsSizePerWait_];
 
   int GetExistingIOEvent(int fd);
-  events::detail::IOEventBase* PopEvent(int fd,
-                                        events::detail::IOEventType event_type);
+  events::IOEvent* PopEvent(int fd, io::IOType event_type);
 };
 
 Poller& GetLocalPoller();

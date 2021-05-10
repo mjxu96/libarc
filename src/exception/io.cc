@@ -66,8 +66,7 @@ std::string TLSException::GetSSLError() {
       err = ERR_get_error();
       if (err == 0) {
         if (is_first_get_error) {
-          err_str =
-              std::error_code(errno, std::generic_category()).message();
+          err_str = std::error_code(errno, std::generic_category()).message();
           std::string err_code = " [" + arc::utils::GetHexString(errno) + "] ";
           err_str = err_code + err_str;
         }
@@ -75,7 +74,7 @@ std::string TLSException::GetSSLError() {
       } else {
         is_first_get_error = false;
         err_str += " [" + arc::utils::GetHexString(err) + "] " +
-                  std::string(ERR_reason_error_string(err));
+                   std::string(ERR_reason_error_string(err));
       }
     }
     return err_str;

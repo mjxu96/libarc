@@ -41,16 +41,15 @@
 #include <queue>
 #include <unordered_map>
 
-#include "io_event_base.h"
+#include "io_event.h"
 
 namespace arc {
 namespace events {
-namespace detail {
 
-class TimerEvent : public IOEventBase {
+class TimerEvent : public IOEvent {
  public:
   TimerEvent(int fd, std::coroutine_handle<void> handle)
-      : IOEventBase(fd, io::IOType::READ, handle) {}
+      : IOEvent(fd, io::IOType::READ, handle) {}
   virtual ~TimerEvent() {}
 };
 
@@ -120,7 +119,6 @@ class AsyncTimerController : public io::detail::IOBase {
 
 AsyncTimerController& GetLocalAsyncTimerController();
 
-}  // namespace detail
 }  // namespace events
 }  // namespace arc
 #endif

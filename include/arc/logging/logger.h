@@ -48,13 +48,9 @@ namespace arc {
 namespace logging {
 
 struct LoggingFormatWrapper {
-
 #ifdef __clang__
-  constexpr LoggingFormatWrapper(
-      const char* format,
-      const char* file_name = "",
-      const char* func_name = "",
-      unsigned line = 0)
+  constexpr LoggingFormatWrapper(const char* format, const char* file_name = "",
+                                 const char* func_name = "", unsigned line = 0)
       : format_{format},
         file_name_{file_name},
         func_name_(func_name),

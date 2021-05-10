@@ -29,15 +29,12 @@
 #ifndef LIBARC__IO__UTILS_H
 #define LIBARC__IO__UTILS_H
 
-
 namespace arc {
 namespace io {
 
 enum class IOType {
   READ = 0U,
   WRITE = 1U,
-  ACCEPT = 2U,
-  CONNECT = 3U,
 };
 
 enum class Pattern {

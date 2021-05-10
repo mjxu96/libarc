@@ -29,10 +29,10 @@
 #ifndef LIBARC__CORO__AWAITER__IO_AWAITER_H
 #define LIBARC__CORO__AWAITER__IO_AWAITER_H
 
-#include <arc/coro/eventloop.h>
-#include <arc/coro/events/io_event_base.h>
-#include <arc/exception/io.h>
 #include <arc/concept/coro.h>
+#include <arc/coro/eventloop.h>
+#include <arc/coro/events/io_event.h>
+#include <arc/exception/io.h>
 
 #include <functional>
 
@@ -42,16 +42,14 @@ namespace coro {
 template <typename ReadyFunctor, typename ResumeFunctor>
 class [[nodiscard]] IOAwaiter {
  public:
-  IOAwaiter(ReadyFunctor&& ready_functor,
-            ResumeFunctor&& resume_functor, int fd, io::IOType io_type)
+  IOAwaiter(ReadyFunctor && ready_functor, ResumeFunctor && resume_functor,
+            int fd, io::IOType io_type)
       : ready_functor_(std::forward<ReadyFunctor>(ready_functor)),
         resume_functor_(std::forward<ResumeFunctor>(resume_functor)),
-        fd_(fd), io_type_(io_type) {}
+        fd_(fd),
+        io_type_(io_type) {}
 
-
-  bool await_ready() {
-    return ready_functor_();
-  }
+  bool await_ready() { return ready_functor_(); }
 
   typename std::invoke_result_t<ResumeFunctor> await_resume() {
     return resume_functor_();
@@ -59,8 +57,7 @@ class [[nodiscard]] IOAwaiter {
 
   template <arc::concepts::PromiseT PromiseType>
   void await_suspend(std::coroutine_handle<PromiseType> handle) {
-    GetLocalEventLoop().AddIOEvent(
-        new events::detail::IOEventBase(fd_, io_type_, handle));
+    GetLocalEventLoop().AddIOEvent(new events::IOEvent(fd_, io_type_, handle));
   }
 
  private:

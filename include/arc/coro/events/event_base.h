@@ -34,7 +34,7 @@
 #ifdef __clang__
 #include <experimental/coroutine>
 namespace std {
-  using experimental::coroutine_handle;
+using experimental::coroutine_handle;
 }
 #else
 #include <coroutine>
@@ -42,7 +42,6 @@ namespace std {
 
 namespace arc {
 namespace events {
-namespace detail {
 
 class EventBase {
  public:
@@ -58,7 +57,6 @@ class EventBase {
   std::coroutine_handle<void> handle_{nullptr};
 };
 
-}  // namespace detail
 }  // namespace events
 }  // namespace arc
 

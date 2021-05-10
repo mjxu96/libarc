@@ -35,17 +35,18 @@ using namespace arc::coro;
 EventLoop::EventLoop() : poller_(&detail::GetLocalPoller()) {}
 
 bool EventLoop::IsDone() {
-  return (poller_->RemainedEvents() <= 0) && (to_dispatched_coroutines_.empty() ||
-                                          type_ != EventLoopType::PRODUCER);
+  return (poller_->RemainedEvents() <= 0) &&
+         (to_dispatched_coroutines_.empty() ||
+          type_ != EventLoopType::PRODUCER);
 }
 
 void EventLoop::Do() {
-
-  if (type_ == EventLoopType::CONSUMER) [[likely]] {
-    ConsumeCoroutine();
-  } else if (type_ == EventLoopType::PRODUCER) [[unlikely]] {
-    ProduceCoroutine();
-  }
+  if (type_ == EventLoopType::CONSUMER)
+    [[likely]] {
+      ConsumeCoroutine();
+    } else if (type_ == EventLoopType::PRODUCER)[[unlikely]] {
+      ProduceCoroutine();
+    }
 
   CleanUpFinishedCoroutines();
 

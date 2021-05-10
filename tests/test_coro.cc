@@ -1,10 +1,10 @@
-#include <gtest/gtest.h>
-#include <arc/coro/task.h>
 #include <arc/coro/eventloop.h>
+#include <arc/coro/task.h>
+#include <gtest/gtest.h>
 
 namespace arc {
 namespace test {
- 
+
 class BasicCoroTest : public ::testing::Test {
  protected:
   coro::Task<int> ReturnInt(int i) {
@@ -40,7 +40,9 @@ class BasicCoroTest : public ::testing::Test {
     auto now = std::chrono::steady_clock::now();
     co_await arc::coro::SleepFor(std::chrono::milliseconds(milliseconds));
     auto then = std::chrono::steady_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(then - now).count();
+    auto elapsed =
+        std::chrono::duration_cast<std::chrono::milliseconds>(then - now)
+            .count();
     EXPECT_NEAR(milliseconds, elapsed, (milliseconds * kMaxAllowedRefError));
     co_return;
   }
@@ -54,29 +56,23 @@ class BasicCoroTest : public ::testing::Test {
     co_return;
   }
 
-  void Fail() {
-    FAIL() << "Expected std::logic_error";
-  }
+  void Fail() { FAIL() << "Expected std::logic_error"; }
 
   coro::Task<void> ExceptionTestCoro() {
     try {
       int ret = co_await ReturnInt(-1);
-    } catch(std::logic_error const & err) {
-      EXPECT_EQ(err.what(),std::string("Error input"));
-    } catch(...) {
+    } catch (std::logic_error const& err) {
+      EXPECT_EQ(err.what(), std::string("Error input"));
+    } catch (...) {
       Fail();
     }
     co_return;
   }
 };
 
-TEST_F(BasicCoroTest, SimpleTest) {
-  coro::StartEventLoop(SimpleTestCoro());
-}
+TEST_F(BasicCoroTest, SimpleTest) { coro::StartEventLoop(SimpleTestCoro()); }
 
-TEST_F(BasicCoroTest, LoopTest) {
-  coro::StartEventLoop(LoopTestCoro());
-}
+TEST_F(BasicCoroTest, LoopTest) { coro::StartEventLoop(LoopTestCoro()); }
 
 TEST_F(BasicCoroTest, RecursiveTest) {
   coro::StartEventLoop(RecursiveTestCoro());
@@ -90,10 +86,9 @@ TEST_F(BasicCoroTest, TimerTest) {
 TEST_F(BasicCoroTest, ExceptionTest) {
   coro::StartEventLoop(ExceptionTestCoro());
 }
- 
-} // namespace testing
-} // namespace arc
 
+}  // namespace test
+}  // namespace arc
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
