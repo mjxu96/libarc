@@ -32,15 +32,10 @@
 
 using namespace arc::coro;
 
-EventLoop::EventLoop() {
-  fd_ = epoll_create1(0);
-  if (fd_ < 0) {
-    throw arc::exception::IOException();
-  }
-}
+EventLoop::EventLoop() : poller_(&detail::GetLocalPoller()) {}
 
 bool EventLoop::IsDone() {
-  return (total_added_task_num_ <= 0) && (to_dispatched_coroutines_.empty() ||
+  return (poller_->RemainedEvents() <= 0) && (to_dispatched_coroutines_.empty() ||
                                           type_ != EventLoopType::PRODUCER);
 }
 
@@ -54,7 +49,7 @@ void EventLoop::Do() {
 
   CleanUpFinishedCoroutines();
 
-  if ((total_added_task_num_ <= 0)) {
+  if ((poller_->RemainedEvents() <= 0)) {
     assert(to_clean_up_handles_.empty());
     while (!to_dispatched_coroutines_.empty() &&
            type_ != EventLoopType::PRODUCER) {
@@ -64,167 +59,14 @@ void EventLoop::Do() {
   }
 
   // Then we will handle all others
-  int event_cnt =
-      epoll_wait(fd_, events, kMaxEventsSizePerWait_, kEpollWaitTimeout_);
-  int todo_cnt = 0;
-  for (int i = 0; i < event_cnt; i++) {
-    int fd = events[i].data.fd;
-    int event_type = events[i].events;
-    if (event_type & EPOLLIN) {
-      todo_events[todo_cnt] = GetEvent(fd, events::detail::IOEventType::READ);
-      todo_cnt++;
-    }
-    if (event_type & EPOLLOUT) {
-      todo_events[todo_cnt] = GetEvent(fd, events::detail::IOEventType::WRITE);
-      todo_cnt++;
-    }
-    if (event_type && ((event_type & EPOLLIN) == 0) &&
-        ((event_type & EPOLLOUT) == 0)) {
-      throw arc::exception::IOException();
-    }
-  }
-
-  // currently we enforce this constraint
-  // in future we will remove this one
-  assert(todo_cnt == event_cnt);
+  int todo_cnt = poller_->WaitIOEvents(todo_events_, 1);
 
   for (int i = 0; i < todo_cnt; i++) {
-    // TODO move this one
-    RemoveIOEvent(todo_events[i]);
-    todo_events[i]->Resume();
+    todo_events_[i]->Resume();
+    delete todo_events_[i];
   }
 
-  for (int i = 0; i < todo_cnt; i++) {
-    delete todo_events[i];
-  }
-
-  total_added_task_num_ -= todo_cnt;
-}
-
-void EventLoop::AddIOEvent(events::detail::IOEventBase* event, bool replace) {
-  auto target_fd = event->GetFd();
-  events::detail::IOEventType event_type = event->GetIOEventType();
-  total_added_task_num_++;
-  int should_add_event =
-      (event_type == events::detail::IOEventType::READ ? EPOLLIN : EPOLLOUT);
-  int prev_events = GetExistIOEvent(target_fd);
-  std::deque<arc::events::detail::IOEventBase*>* to_be_pushed_queue = nullptr;
-  if ((prev_events & should_add_event) == 0) {
-    if (target_fd < kMaxFdInArray_) {
-      to_be_pushed_queue = &io_events_[target_fd][static_cast<int>(event_type)];
-    } else {
-      if (extra_io_events_.find(target_fd) == extra_io_events_.end()) {
-        extra_io_events_[target_fd] =
-            std::vector<std::deque<events::detail::IOEventBase*>>{
-                2, std::deque<events::detail::IOEventBase*>{}};
-      }
-      to_be_pushed_queue =
-          &extra_io_events_[target_fd][static_cast<int>(event_type)];
-    }
-
-    if (replace) [[unlikely]] {
-      assert(to_be_pushed_queue->empty());
-    }
-    to_be_pushed_queue->push_back(event);
-
-    int op = (prev_events == 0 ? EPOLL_CTL_ADD : EPOLL_CTL_MOD);
-    epoll_event e_event{};
-    e_event.events = prev_events | should_add_event;
-    e_event.data.fd = target_fd;
-
-    int epoll_ret = epoll_ctl(fd_, op, target_fd, &e_event);
-    if (epoll_ret != 0) {
-      throw arc::exception::IOException();
-    }
-  } else {
-    // already added
-    if (target_fd < kMaxFdInArray_) {
-      to_be_pushed_queue = &io_events_[target_fd][static_cast<int>(event_type)];
-    } else {
-      to_be_pushed_queue =
-          &extra_io_events_[target_fd][static_cast<int>(event_type)];
-    }
-    if (replace) [[unlikely]] {
-      assert(to_be_pushed_queue->size() == 1);
-      delete to_be_pushed_queue->front();
-      total_added_task_num_--;
-      to_be_pushed_queue->clear();
-    }
-    to_be_pushed_queue->push_back(event);
-    return;
-  }
-}
-
-arc::events::detail::IOEventBase* EventLoop::GetEvent(
-    int fd, events::detail::IOEventType event_type) {
-  arc::events::detail::IOEventBase* event = nullptr;
-  if (fd < kMaxFdInArray_) {
-    event = io_events_[fd][static_cast<int>(event_type)].front();
-  } else {
-    event = extra_io_events_[fd][static_cast<int>(event_type)].front();
-  }
-  return event;
-}
-
-void EventLoop::RemoveIOEvent(events::detail::IOEventBase* event) {
-  int target_fd = event->GetFd();
-  events::detail::IOEventType event_type = event->GetIOEventType();
-
-  int after_io_events = 0;
-  if (target_fd < kMaxFdInArray_) {
-    assert(!io_events_[target_fd][static_cast<int>(event_type)].empty());
-    assert(io_events_[target_fd][static_cast<int>(event_type)].front() ==
-           event);
-    io_events_[target_fd][static_cast<int>(event_type)].pop_front();
-  } else {
-    assert(!extra_io_events_[target_fd][static_cast<int>(event_type)].empty());
-    assert(extra_io_events_[target_fd][static_cast<int>(event_type)].front() ==
-           event);
-    extra_io_events_[target_fd][static_cast<int>(event_type)].pop_front();
-  }
-  after_io_events = GetExistIOEvent(target_fd);
-
-  int op = (after_io_events == 0 ? EPOLL_CTL_DEL : EPOLL_CTL_MOD);
-  int epoll_ret = -1;
-  if (op == EPOLL_CTL_DEL) {
-    epoll_ret = epoll_ctl(fd_, op, target_fd, nullptr);
-  } else {
-    epoll_event e_event{};
-    e_event.events = after_io_events;
-    e_event.data.fd = target_fd;
-    epoll_ret = epoll_ctl(fd_, op, target_fd, &e_event);
-  }
-  if (epoll_ret != 0) {
-    throw arc::exception::IOException();
-  }
-}
-
-int EventLoop::GetExistIOEvent(int fd) {
-  int prev = 0;
-  if (fd < kMaxFdInArray_) {
-    if (!io_events_[fd][static_cast<int>(events::detail::IOEventType::READ)]
-             .empty()) {
-      prev |= EPOLLIN;
-    }
-    if (!io_events_[fd][static_cast<int>(events::detail::IOEventType::WRITE)]
-             .empty()) {
-      prev |= EPOLLOUT;
-    }
-  } else {
-    if (extra_io_events_.find(fd) != extra_io_events_.end() &&
-        !extra_io_events_[fd]
-                         [static_cast<int>(events::detail::IOEventType::READ)]
-                             .empty()) {
-      prev |= EPOLLIN;
-    }
-    if (extra_io_events_.find(fd) != extra_io_events_.end() &&
-        !extra_io_events_[fd]
-                         [static_cast<int>(events::detail::IOEventType::WRITE)]
-                             .empty()) {
-      prev |= EPOLLOUT;
-    }
-  }
-  return prev;
+  poller_->TrimIOEvents();
 }
 
 void EventLoop::AddToCleanUpCoroutine(std::coroutine_handle<> handle) {

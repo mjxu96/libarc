@@ -139,7 +139,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   template <Pattern UPP = PP>
   requires(UPP == Pattern::ASYNC) coro::Task<ssize_t> Recv(char* buf, int max_recv_bytes) {
     while (true) {
-      ssize_t ret = SSL_read(ssl_.ssl, this->buffer_, RECV_BUFFER_SIZE);
+      ssize_t ret = SSL_read(ssl_.ssl, buf, RECV_BUFFER_SIZE);
       if (ret <= 0) {
         int err = SSL_get_error(ssl_.ssl, ret);
         if (err == SSL_ERROR_WANT_READ) {

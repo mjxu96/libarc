@@ -8,6 +8,7 @@ set(ARC_CORO_FILES
   ${LIBARC_SOURCE_DIR}/src/coro/eventloop.cc
   ${LIBARC_SOURCE_DIR}/src/coro/dispatcher.cc
   ${LIBARC_SOURCE_DIR}/src/coro/events/time_event.cc
+  ${LIBARC_SOURCE_DIR}/src/coro/poller/epoll.cc
   ${LIBARC_SOURCE_DIR}/src/coro/task.cc
 )
 

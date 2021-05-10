@@ -85,7 +85,11 @@ class Socket : public detail::SocketBase<AF,
     return *this;
   }
 
-  virtual ~Socket() {}
+  virtual ~Socket() {
+    if (this->fd_ > 0) {
+      coro::GetLocalEventLoop().RemoveAllIOEvents(this->fd_);
+    }
+  }
 
   template <net::Protocol UP = P, Pattern UPP = PP>
       requires(UP == net::Protocol::TCP) &&

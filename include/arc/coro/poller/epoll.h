@@ -6,17 +6,17 @@
  * -----
  * MIT License
  * Copyright (c) 2020 Minjun Xu
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
  * deal in the Software without restriction, including without limitation the
  * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
  * sell copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -29,15 +29,20 @@
 #ifndef LIBARC__CORO__POLLER__EPOLL_H
 #define LIBARC__CORO__POLLER__EPOLL_H
 
+#ifdef __linux__
+
+#include <arc/coro/events/io_event_base.h>
 #include <arc/io/io_base.h>
 #include <sys/epoll.h>
-#include <arc/coro/events/io_event_base.h>
-#include <vector>
-#include <unordered_map>
+
 #include <deque>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 namespace arc {
 namespace coro {
+namespace detail {
 
 class Poller : public io::detail::IOBase {
  public:
@@ -45,37 +50,45 @@ class Poller : public io::detail::IOBase {
   ~Poller() = default;
 
   void AddIOEvent(events::detail::IOEventBase* event, bool replace = false);
-  void RemoveIOEvent(events::detail::IOEventBase* event);
+  void RemoveAllIOEvents(int target_fd);
 
-  void CleanUp();
+  int WaitIOEvents(events::detail::IOEventBase** todo_events, int timeout = 1);
+  void TrimIOEvents();
+
+  inline int RemainedEvents() const { return total_events_; }
+  constexpr inline int MaxEventsPerWait() const { return kMaxEventsSizePerWait_; }
 
  private:
   const static int kMaxEventsSizePerWait_ = 1024;
   const static int kMaxFdInArray_ = 1024;
-  const static int kEpollWaitTimeout_ = 1;
 
-  int total_added_task_num_{0};
+  int total_events_{0};
+
+  std::unordered_set<int> interesting_fds_{};
 
   // {fd -> {io_type -> [events]}}
   std::vector<std::vector<std::deque<events::detail::IOEventBase*>>> io_events_{
       kMaxFdInArray_, std::vector<std::deque<events::detail::IOEventBase*>>{
                           2, std::deque<events::detail::IOEventBase*>{}}};
+  int io_prev_events_[kMaxFdInArray_] = {0};
+
   std::unordered_map<int, std::vector<std::deque<events::detail::IOEventBase*>>>
       extra_io_events_{};
+  std::unordered_map<int, int> extra_io_prev_events_{};
 
   // epoll related
   epoll_event events_[kMaxEventsSizePerWait_];
-  events::detail::IOEventBase* todo_events_[2 * kMaxEventsSizePerWait_] = {
-      nullptr};
 
-  int GetExistIOEvent(int fd);
-  events::detail::IOEventBase* GetEvent(int fd,
+  int GetExistingIOEvent(int fd);
+  events::detail::IOEventBase* PopEvent(int fd,
                                         events::detail::IOEventType event_type);
 };
 
-} // namespace coro
-} // namespace arc
+Poller& GetLocalPoller();
 
+}  // namespace detail
+}  // namespace coro
+}  // namespace arc
 
-
+#endif  // __linux__
 #endif

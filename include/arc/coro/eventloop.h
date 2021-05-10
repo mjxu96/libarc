@@ -37,6 +37,10 @@
 #include <arc/concept/coro.h>
 #include <arc/coro/dispatcher.h>
 
+#ifdef __linux__
+#include <arc/coro/poller/epoll.h>
+#endif
+
 #ifdef __clang__
 #include <experimental/coroutine>
 namespace std {
@@ -63,19 +67,24 @@ enum class EventLoopType {
 template <arc::concepts::CopyableMoveableOrVoid T>
 class [[nodiscard]] Task;
 
-class EventLoop : public io::detail::IOBase {
+class EventLoop {
  public:
   EventLoop();
   ~EventLoop() = default;
 
   bool IsDone();
   void Do();
-  void AddIOEvent(events::detail::IOEventBase* event, bool replace = false);
-  void RemoveIOEvent(events::detail::IOEventBase* event);
+
+  inline void AddIOEvent(events::detail::IOEventBase* event, bool replace = false) {
+    poller_->AddIOEvent(event, replace);
+  }
+
+  inline void RemoveAllIOEvents(int fd) {
+    poller_->RemoveAllIOEvents(fd);
+  }
 
   void AddToCleanUpCoroutine(std::coroutine_handle<> handle);
 
-  void CleanUp();
   void CleanUpFinishedCoroutines();
 
   void Dispatch(Task<void>&& task);
@@ -83,32 +92,16 @@ class EventLoop : public io::detail::IOBase {
   void AsConsumer();
 
  private:
+  detail::Poller* poller_{nullptr};
+
   const static int kMaxEventsSizePerWait_ = 1024;
-  const static int kMaxFdInArray_ = 1024;
-  const static int kEpollWaitTimeout_ = 1;
   const static int kMaxConsumableCoroutineNum_ = 4;
 
-  int total_added_task_num_{0};
-
-  // {fd -> {io_type -> [events]}}
-  std::vector<std::vector<std::deque<events::detail::IOEventBase*>>> io_events_{
-      kMaxFdInArray_, std::vector<std::deque<events::detail::IOEventBase*>>{
-                          2, std::deque<events::detail::IOEventBase*>{}}};
-
-  std::unordered_map<int, std::vector<std::deque<events::detail::IOEventBase*>>>
-      extra_io_events_{};
-
-  // epoll related
-  epoll_event events[kMaxEventsSizePerWait_];
-  events::detail::IOEventBase* todo_events[2 * kMaxEventsSizePerWait_] = {
+  // poller related
+  events::detail::IOEventBase* todo_events_[2 * kMaxEventsSizePerWait_] = {
       nullptr};
 
-  int GetExistIOEvent(int fd);
-  events::detail::IOEventBase* GetEvent(int fd,
-                                        events::detail::IOEventType event_type);
-
   std::vector<std::coroutine_handle<>> to_clean_up_handles_{};
-
   std::vector<std::coroutine_handle<>> to_dispatched_coroutines_{};
   EventDispatcher<std::coroutine_handle<void>>* global_dispatcher_{nullptr};
   EventLoopType type_{EventLoopType::NONE};

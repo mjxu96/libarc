@@ -83,7 +83,7 @@ TEST_F(BasicCoroTest, RecursiveTest) {
 }
 
 TEST_F(BasicCoroTest, TimerTest) {
-  coro::StartEventLoop(TimerTestCoro(1000));
+  // coro::StartEventLoop(TimerTestCoro(1000));
   coro::StartEventLoop(TestMultiPleTimer(5));
 }
 
