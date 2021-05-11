@@ -32,6 +32,7 @@
 #include <arc/concept/coro.h>
 #include <arc/coro/dispatcher.h>
 #include <arc/coro/events/io_event.h>
+#include <arc/coro/events/time_event.h>
 #include <arc/io/io_base.h>
 #include <arc/utils/bits.h>
 #include <assert.h>
@@ -73,16 +74,20 @@ class EventLoop {
   ~EventLoop() = default;
 
   bool IsDone();
+  void InitDo();
   void Do();
 
-  inline void AddIOEvent(events::IOEvent* event, bool replace = false) {
-    poller_->AddIOEvent(event, replace);
+  inline void AddIOEvent(events::IOEvent* event) {
+    poller_->AddIOEvent(event);
+  }
+
+  inline void AddTimeEvent(events::TimeEvent* event) {
+    poller_->AddTimeEvent(event);
   }
 
   inline void RemoveAllIOEvents(int fd) { poller_->RemoveAllIOEvents(fd); }
 
   void AddToCleanUpCoroutine(std::coroutine_handle<> handle);
-
   void CleanUpFinishedCoroutines();
 
   void Dispatch(Task<void>&& task);
@@ -92,11 +97,11 @@ class EventLoop {
  private:
   detail::Poller* poller_{nullptr};
 
-  const static int kMaxEventsSizePerWait_ = 1024;
+  const static int kMaxEventsSizePerWait_ = detail::Poller::kMaxEventsSizePerWait;
   const static int kMaxConsumableCoroutineNum_ = 4;
 
   // poller related
-  events::IOEvent* todo_events_[2 * kMaxEventsSizePerWait_] = {nullptr};
+  events::EventBase* todo_events_[2 * kMaxEventsSizePerWait_] = {nullptr};
 
   std::vector<std::coroutine_handle<>> to_clean_up_handles_{};
   std::vector<std::coroutine_handle<>> to_dispatched_coroutines_{};

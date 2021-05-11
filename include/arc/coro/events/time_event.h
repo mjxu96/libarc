@@ -29,95 +29,31 @@
 #ifndef LIBARC__CORO__EVENTS__TIME_EVENT_H
 #define LIBARC__CORO__EVENTS__TIME_EVENT_H
 
-#include <arc/coro/eventloop.h>
-#include <arc/exception/io.h>
-#include <arc/io/io_base.h>
-#include <fcntl.h>
-#include <sys/timerfd.h>
-
 #include <chrono>
-#include <cstring>
-#include <optional>
-#include <queue>
-#include <unordered_map>
-
-#include "io_event.h"
+#include "event_base.h"
 
 namespace arc {
 namespace events {
 
-class TimerEvent : public IOEvent {
+class TimeEvent : public EventBase {
  public:
-  TimerEvent(int fd, std::coroutine_handle<void> handle)
-      : IOEvent(fd, io::IOType::READ, handle) {}
-  virtual ~TimerEvent() {}
-};
+  TimeEvent(std::int64_t wakeup_time, std::coroutine_handle<void> handle)
+      : EventBase(handle), wakeup_time_(wakeup_time) {}
 
-class AsyncTimerController : public io::detail::IOBase {
- public:
-  AsyncTimerController() : io::detail::IOBase() {
-    fd_ = timerfd_create(CLOCK_MONOTONIC, 0);
-    if (fd_ < 0) {
-      throw arc::exception::IOException("Creating Local Timer Error");
-    }
-    int flags = fcntl(fd_, F_GETFL);
-    if (flags < 0) {
-      throw arc::exception::IOException("Creating Local Timer Error");
-    }
-    flags = fcntl(fd_, F_SETFL, flags | O_NONBLOCK);
-    if (flags < 0) {
-      throw arc::exception::IOException("Creating Local Timer Error");
-    }
-  }
-  virtual ~AsyncTimerController() {}
-  AsyncTimerController(const AsyncTimerController&) = delete;
-  AsyncTimerController(AsyncTimerController&&) = delete;
-  AsyncTimerController& operator=(const AsyncTimerController&) = delete;
-  AsyncTimerController& operator=(AsyncTimerController&&) = delete;
+  virtual ~TimeEvent() {}
 
-  void AddWakeupTimePoint(int64_t next_wakeup_time,
-                          std::coroutine_handle<void> handle) {
-    q_.push(next_wakeup_time);
-    assert(handles_.find(next_wakeup_time) == handles_.end());
-    handles_[next_wakeup_time] = handle;
-    if (q_.top() == next_wakeup_time) {
-      FireNextAvailableTimePoint();
-    }
-  }
-
-  void FireNextAvailableTimePoint() {
-    if (q_.empty()) {
-      return;
-    }
-    int64_t next_wakeup_time = q_.top();
-    std::coroutine_handle<void> handle = handles_[next_wakeup_time];
-    itimerspec next_wakeup_ti;
-    std::memset(&next_wakeup_ti, 0, sizeof(itimerspec));
-    next_wakeup_ti.it_value.tv_sec = next_wakeup_time / 1000000000;
-    next_wakeup_ti.it_value.tv_nsec = next_wakeup_time % 1000000000;
-    int ret = timerfd_settime(fd_, TFD_TIMER_ABSTIME, &next_wakeup_ti, nullptr);
-    if (ret < 0) {
-      throw arc::exception::IOException("Set Timer Error");
-    }
-    coro::GetLocalEventLoop().AddIOEvent(new TimerEvent(fd_, handle), true);
-  }
-
-  void PopFirstTimePoint() {
-    char buf[8] = {0};
-    if (read(fd_, buf, 8) < 0) {
-      throw arc::exception::IOException("Pop Timer Error");
-    }
-    int64_t wakeup_time = q_.top();
-    handles_.erase(wakeup_time);
-    q_.pop();
-  }
-
+  const inline std::int64_t GetWakeupTime() const { return wakeup_time_; }
+  friend class TimeEventComparator;
  private:
-  std::priority_queue<int64_t, std::vector<int64_t>, std::greater<int64_t>> q_;
-  std::unordered_map<int64_t, std::coroutine_handle<void>> handles_;
+  std::int64_t wakeup_time_ = 0;
 };
 
-AsyncTimerController& GetLocalAsyncTimerController();
+class TimeEventComparator {
+ public:
+  bool operator() (TimeEvent* event1, TimeEvent* event2) {
+    return event1->wakeup_time_ > event2->wakeup_time_;
+  }
+};
 
 }  // namespace events
 }  // namespace arc

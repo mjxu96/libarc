@@ -106,6 +106,28 @@ class SocketBase : public IOBase {
     is_bound_ = true;
   }
 
+  net::Address<AF> GetLocalAddress() {
+    using SockAddrT = typename std::conditional_t<AF == net::Domain::IPV4, sockaddr_in, sockaddr_in6>;
+    SockAddrT local_sin;
+    socklen_t local_sinlen = sizeof(local_sin);
+    int ret = getsockname(this->fd_, (struct sockaddr*)&local_sin, &local_sinlen);
+    if (ret != 0) {
+      throw arc::exception::IOException("Get Local Address Error");
+    }
+    return net::Address<AF>(local_sin);
+  }
+
+  net::Address<AF> GetPeerAddress() {
+    using SockAddrT = typename std::conditional_t<AF == net::Domain::IPV4, sockaddr_in, sockaddr_in6>;
+    SockAddrT peer_sin;
+    socklen_t peer_sinlen = sizeof(peer_sin);
+    int ret = getpeername(this->fd_, (struct sockaddr*)&peer_sin, &peer_sinlen);
+    if (ret != 0) {
+      throw arc::exception::IOException("Get Peer Address Error");
+    }
+    return net::Address<AF>(peer_sin);
+  }
+
   void SetOption(arc::net::SocketOption option_name, int opt_value) {
     if (setsockopt(fd_, (int)(arc::net::SocketLevel::SOCKET), (int)option_name,
                    &opt_value, sizeof(opt_value)) < 0) {

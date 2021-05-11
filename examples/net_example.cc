@@ -26,16 +26,16 @@
  * IN THE SOFTWARE.
  */
 
+#include <iostream>
 #include <arc/net/address.h>
 
-#include <iostream>
 
 using namespace arc::net;
 
 int main() {
   try {
     /* code */
-    // Address<Domain::IPV6> addr("www.google.com", 8080);
+    // Address<Domain::IPV6> addr("www.google.com", 443);
     Address<Domain::IPV6> addr("ip6-localhost", 8080);
     std::cout << addr.GetHost() << ":" << addr.GetPort() << std::endl;
     std::cout << addr.IsValid() << std::endl;

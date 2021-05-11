@@ -118,18 +118,10 @@ class Address {
       return;
     }
     host_ = tmp;
-    if (is_from_dns) {
-      if constexpr (AF == Domain::IPV4) {
-        port_ = ntohs(addr_.sin_port);
-      } else if constexpr (AF == Domain::IPV6) {
-        port_ = ntohs(addr_.sin6_port);
-      }
-    } else {
-      if constexpr (AF == Domain::IPV4) {
-        port_ = addr_.sin_port;
-      } else if constexpr (AF == Domain::IPV6) {
-        port_ = addr_.sin6_port;
-      }
+    if constexpr (AF == Domain::IPV4) {
+      port_ = ntohs(addr_.sin_port);
+    } else if constexpr (AF == Domain::IPV6) {
+      port_ = ntohs(addr_.sin6_port);
     }
     is_valid_ = true;
   }

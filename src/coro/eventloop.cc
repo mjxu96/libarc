@@ -40,6 +40,11 @@ bool EventLoop::IsDone() {
           type_ != EventLoopType::PRODUCER);
 }
 
+void EventLoop::InitDo() {
+  poller_->TrimIOEvents();
+  poller_->TrimTimeEvents();
+}
+
 void EventLoop::Do() {
   if (type_ == EventLoopType::CONSUMER)
     [[likely]] {
@@ -60,7 +65,7 @@ void EventLoop::Do() {
   }
 
   // Then we will handle all others
-  int todo_cnt = poller_->WaitIOEvents(todo_events_, 1);
+  int todo_cnt = poller_->WaitEvents(todo_events_);
 
   for (int i = 0; i < todo_cnt; i++) {
     todo_events_[i]->Resume();
@@ -68,6 +73,7 @@ void EventLoop::Do() {
   }
 
   poller_->TrimIOEvents();
+  poller_->TrimTimeEvents();
 }
 
 void EventLoop::AddToCleanUpCoroutine(std::coroutine_handle<> handle) {

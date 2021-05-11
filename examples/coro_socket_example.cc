@@ -59,6 +59,8 @@ void StartLongTimeJob() {
 Task<void> HandleClient(
     Socket<Domain::IPV4, Protocol::TCP, Pattern::ASYNC> sock) {
   std::shared_ptr<char[]> data(new char[1024]);
+  auto local_addr = sock.GetPeerAddress();
+  std::cout << "client ip: " << local_addr.GetHost() << " port: " << local_addr.GetPort() << std::endl;
   try {
     std::string received;
     bool connection_alive = true;
@@ -86,6 +88,8 @@ Task<void> HandleClient(
 
 Task<void> HandleClient(TLSSocket<Domain::IPV4, Pattern::ASYNC> sock) {
   std::shared_ptr<char[]> data(new char[1024]);
+  auto local_addr = sock.GetPeerAddress();
+  std::cout << "client ip: " << local_addr.GetHost() << " port: " << local_addr.GetPort() << std::endl;
   try {
     std::string received;
     bool connection_alive = true;
@@ -117,9 +121,11 @@ Task<void> Listen() {
   accpetor.SetOption(arc::net::SocketOption::REUSEPORT, 1);
   accpetor.Bind({"localhost", 8086});
   accpetor.Listen();
+  auto local_addr = accpetor.GetLocalAddress();
+  std::cout << "acceptor ip: " << local_addr.GetHost() << " port: " << local_addr.GetPort() << std::endl;
   std::cout << "http listen starts" << std::endl;
   int i = 0;
-  while (i < 2) {
+  while (i < 405) {
     auto in_sock = co_await accpetor.Accept();
     arc::coro::EnsureFuture(HandleClient(std::move(in_sock)));
     i++;
@@ -172,6 +178,7 @@ Task<void> TLSConnect() {
     }
     received.append(data.get(), recv);
   }
+  co_await arc::coro::SleepFor(std::chrono::milliseconds(500));
   std::cout << received << std::endl;
   co_return;
 }
@@ -182,14 +189,16 @@ Task<void> TLSAccept() {
   std::cout << "acceptor fd: " << accpetor.GetFd() << std::endl;
   accpetor.SetOption(arc::net::SocketOption::REUSEADDR, 1);
   accpetor.SetOption(arc::net::SocketOption::REUSEPORT, 1);
-  accpetor.Bind({"localhost", 8086});
+  accpetor.Bind({"0.0.0.0", 8086});
   accpetor.Listen();
+  auto local_addr = accpetor.GetLocalAddress();
+  std::cout << "acceptor ip: " << local_addr.GetHost() << " port: " << local_addr.GetPort() << std::endl;
   std::cout << "https listen starts" << std::endl;
   int i = 0;
   while (i < 2) {
     auto in_sock = co_await accpetor.Accept();
     EnsureFuture(HandleClient(std::move(in_sock)));
-    i++;
+    // i++;
   }
 }
 
@@ -247,6 +256,6 @@ int main(int argc, char** argv) {
   std::cout << "finished" << std::endl;
   StartEventLoop(Connect());
   StartEventLoop(TLSConnect());
-  StartEventLoop(Listen());
+  // StartEventLoop(Listen());
   StartEventLoop(TLSAccept());
 }

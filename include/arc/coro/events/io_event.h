@@ -41,24 +41,16 @@ namespace events {
 class IOEvent : public EventBase {
  public:
   IOEvent(int fd, io::IOType io_type, std::coroutine_handle<void> handle)
-      : EventBase(handle), fd_(fd), io_type_(io_type) {
-    if (io_type == io::IOType::READ) {
-      io_event_type_ = io::IOType::READ;
-    } else {
-      io_event_type_ = io::IOType::WRITE;
-    }
-  }
+      : EventBase(handle), fd_(fd), io_type_(io_type) {}
 
   virtual ~IOEvent() {}
 
   inline int GetFd() const noexcept { return fd_; }
-  inline io::IOType GetIOEventType() const noexcept { return io_event_type_; }
   inline io::IOType GetIOType() const noexcept { return io_type_; }
 
  protected:
   int fd_{-1};
   io::IOType io_type_{};
-  io::IOType io_event_type_{};
 };
 
 }  // namespace events

@@ -34,6 +34,7 @@ void arc::coro::EnsureFuture(Task<void>&& task) { task.Start(true); }
 
 void arc::coro::RunUntilComplelete() {
   auto& event_loop = GetLocalEventLoop();
+  event_loop.InitDo();
   while (!event_loop.IsDone()) {
     event_loop.Do();
   }

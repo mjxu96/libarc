@@ -35,6 +35,10 @@ class BasicCoroTest : public ::testing::Test {
     EXPECT_EQ(ret, 50005000);
   }
 
+  coro::Task<void> InnerTimerTestCoro(int milliseconds) {
+    co_await arc::coro::SleepFor(std::chrono::milliseconds(milliseconds));
+  }
+
   coro::Task<void> TimerTestCoro(int milliseconds) {
     const float kMaxAllowedRefError = 0.05;
     auto now = std::chrono::steady_clock::now();
@@ -44,6 +48,15 @@ class BasicCoroTest : public ::testing::Test {
         std::chrono::duration_cast<std::chrono::milliseconds>(then - now)
             .count();
     EXPECT_NEAR(milliseconds, elapsed, (milliseconds * kMaxAllowedRefError));
+
+    now = then;
+    milliseconds = 1000 - milliseconds;
+    co_await InnerTimerTestCoro(milliseconds);
+    then = std::chrono::steady_clock::now();
+    elapsed =
+        std::chrono::duration_cast<std::chrono::milliseconds>(then - now)
+            .count();
+    EXPECT_NEAR(milliseconds, elapsed, ((milliseconds) * kMaxAllowedRefError));
     co_return;
   }
 

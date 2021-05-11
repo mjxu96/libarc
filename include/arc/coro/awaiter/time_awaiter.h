@@ -41,7 +41,7 @@ namespace coro {
 class [[nodiscard]] TimeAwaiter {
  public:
   TimeAwaiter(const std::chrono::steady_clock::duration& sleep_time)
-      : next_wakeup_time_(std::chrono::duration_cast<std::chrono::nanoseconds>(
+      : next_wakeup_time_(std::chrono::duration_cast<std::chrono::milliseconds>(
                               (std::chrono::steady_clock::now() + sleep_time)
                                   .time_since_epoch())
                               .count()) {}
@@ -50,17 +50,14 @@ class [[nodiscard]] TimeAwaiter {
 
   template <arc::concepts::PromiseT PromiseType>
   void await_suspend(std::coroutine_handle<PromiseType> handle) {
-    events::GetLocalAsyncTimerController().AddWakeupTimePoint(next_wakeup_time_,
-                                                              handle);
+    GetLocalEventLoop().AddTimeEvent(new events::TimeEvent(next_wakeup_time_, handle));
   }
 
   void await_resume() {
-    events::GetLocalAsyncTimerController().PopFirstTimePoint();
-    events::GetLocalAsyncTimerController().FireNextAvailableTimePoint();
   }
 
  private:
-  int64_t next_wakeup_time_;
+  std::int64_t next_wakeup_time_;
 };
 
 }  // namespace coro
