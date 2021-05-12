@@ -98,7 +98,7 @@ class Address {
   using CAddressType = typename std::conditional_t<(AF == Domain::IPV4),
                                                    sockaddr_in, sockaddr_in6>;
 
-  void Init(const CAddressType& addr, bool is_from_dns = false) {
+  void Init(const CAddressType& addr) {
     if (((int)AF) != ((sockaddr*)&addr)->sa_family) {
       throw arc::exception::AddressException(
           "Trying to attch a " +
@@ -108,7 +108,7 @@ class Address {
           " address");
     }
     addr_ = addr;
-    char tmp[INET6_ADDRSTRLEN];
+    char tmp[INET6_ADDRSTRLEN] = { 0 };
     if constexpr (AF == Domain::IPV4) {
       inet_ntop(AF_INET, &(addr_.sin_addr), tmp, INET_ADDRSTRLEN);
     } else if constexpr (AF == Domain::IPV6) {
@@ -137,7 +137,7 @@ class Address {
     int s = getaddrinfo(host.c_str(), std::to_string(port).c_str(), &hints,
                         &result);
     if (s == 0 && result != nullptr) {
-      Init(*((CAddressType*)(result->ai_addr)), true);
+      Init(*((CAddressType*)(result->ai_addr)));
       freeaddrinfo(result);
     } else {
       freeaddrinfo(result);

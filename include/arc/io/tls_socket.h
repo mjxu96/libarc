@@ -118,14 +118,14 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
                           : max_recv_bytes);
     int left_size = max_recv_bytes;
     while (left_size > 0) {
-      int this_read_size = std::min(left_size, RECV_BUFFER_SIZE);
+      int this_read_size = std::min(left_size, this->kRecvBufferSize_);
       ssize_t tmp_read = SSL_read(ssl_.ssl, this->buffer_, this_read_size);
       if (tmp_read > 0) {
         buffer.append(this->buffer_, tmp_read);
       }
       if (tmp_read == -1) {
         throw arc::exception::TLSException("Read Error");
-      } else if (tmp_read < RECV_BUFFER_SIZE) {
+      } else if (tmp_read < this->kRecvBufferSize_) {
         // we read all contents;
         break;
       }
@@ -138,7 +138,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   requires(UPP == Pattern::ASYNC) coro::Task<ssize_t> Recv(char* buf,
                                                            int max_recv_bytes) {
     while (true) {
-      ssize_t ret = SSL_read(ssl_.ssl, buf, RECV_BUFFER_SIZE);
+      ssize_t ret = SSL_read(ssl_.ssl, buf, max_recv_bytes);
       if (ret <= 0) {
         int err = SSL_get_error(ssl_.ssl, ret);
         if (err == SSL_ERROR_WANT_READ) {
@@ -175,7 +175,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
     bool is_data_read = false;
     std::string ret_str;
     while (true) {
-      ret = SSL_read(ssl_.ssl, this->buffer_, RECV_BUFFER_SIZE);
+      ret = SSL_read(ssl_.ssl, this->buffer_, this->kRecvBufferSize_);
       if (ret <= 0) {
         int err = SSL_get_error(ssl_.ssl, ret);
         if (err == SSL_ERROR_WANT_READ) {

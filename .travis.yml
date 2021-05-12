@@ -9,6 +9,7 @@ matrix:
               key_url: "https://apt.kitware.com/keys/kitware-archive-latest.asc"
             - ubuntu-toolchain-r-test
           packages:
+            - openssl
             - cmake
             - gcc-10
             - g++-10
@@ -26,6 +27,7 @@ matrix:
             - sourceline: "deb https://apt.kitware.com/ubuntu/ bionic main"
               key_url: "https://apt.kitware.com/keys/kitware-archive-latest.asc"
           packages:
+            - openssl
             - cmake
             - clang-11
             - libc++-11-dev
@@ -43,6 +45,10 @@ before_install:
   - sudo apt update
   - eval "${MATRIX_EVAL}"
 
+  # add ssl keys
+  - mkdir -p ${HOME}/data/keys
+  - openssl req -x509 -newkey rsa:4096 -keyout ${HOME}/data/keys/key.pem -out ${HOME}/data/keys/cert.pem -days 365 -nodes -subj '/CN=localhost'
+
 install:
   - sudo apt install -y make libgtest-dev
 
@@ -52,4 +58,4 @@ install:
 
 script:
   - cmake --version
-  - mkdir build && cd build && cmake ../ -DCMAKE_BUILD_TYPE="${ARC_CMAKE_BUILD_TYPE}" -DARC_BUILD_TESTS=ON && make -j2 && ./cmake/tests/coro_test
+  - mkdir build && cd build && cmake ../ -DCMAKE_BUILD_TYPE="${ARC_CMAKE_BUILD_TYPE}" -DARC_BUILD_TESTS=ON && make -j2 && ./cmake/tests/test_coro && ./cmake/tests/test_coro_socket

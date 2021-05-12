@@ -48,7 +48,7 @@
 
 #include "io_base.h"
 
-#define RECV_BUFFER_SIZE 1024
+// #define kRecvBufferSize_ 1024
 
 namespace arc {
 namespace io {
@@ -158,8 +158,9 @@ class SocketBase : public IOBase {
       typename std::conditional_t<(AF == arc::net::Domain::IPV4), sockaddr_in,
                                   sockaddr_in6>;
 
+  constexpr static int kRecvBufferSize_ = 1024;
   net::Address<AF> addr_{};
-  char buffer_[RECV_BUFFER_SIZE] = {0};
+  char buffer_[kRecvBufferSize_] = {0};
   bool is_non_blocking_{false};
   bool is_bound_{false};
 
@@ -198,7 +199,7 @@ class SocketBase : public IOBase {
                           : max_recv_bytes);
     int left_size = max_recv_bytes;
     while (left_size > 0) {
-      int this_read_size = std::min(left_size, RECV_BUFFER_SIZE);
+      int this_read_size = std::min(left_size, kRecvBufferSize_);
       ssize_t tmp_read = recv(this->fd_, buffer_, this_read_size, 0);
       if (tmp_read > 0) {
         buffer.append(buffer_, tmp_read);
@@ -208,7 +209,7 @@ class SocketBase : public IOBase {
           throw arc::exception::IOException();
         }
         break;
-      } else if (tmp_read < RECV_BUFFER_SIZE) {
+      } else if (tmp_read < kRecvBufferSize_) {
         // we read all contents;
         break;
       }
@@ -248,8 +249,8 @@ class SocketBase : public IOBase {
 
  private:
   void MoveFrom(SocketBase&& other) {
-    std::memset(buffer_, 0, RECV_BUFFER_SIZE);
-    std::memcpy(buffer_, other.buffer_, RECV_BUFFER_SIZE);
+    std::memset(buffer_, 0, kRecvBufferSize_);
+    std::memcpy(buffer_, other.buffer_, kRecvBufferSize_);
     addr_ = std::move(other.addr_);
     is_non_blocking_ = other.is_non_blocking_;
   }
