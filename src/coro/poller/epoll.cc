@@ -62,21 +62,20 @@ int Poller::WaitEvents(events::EventBase** todo_events) {
     }
     if (event_type && ((event_type & EPOLLIN) == 0) &&
         ((event_type & EPOLLOUT) == 0)) {
-      std::string exception_str = "Returned Epoll Events Are Not Supported" +
-                                  std::to_string(event_type);
-      throw arc::exception::IOException(exception_str);
+      throw arc::exception::IOException("Returned Epoll Events Are Not Supported" +
+                                  std::to_string(event_type));
     }
   }
 
   // time events
-  if (todo_cnt < kMaxEventsSizePerWait && !time_events_.empty()) {
-    auto top_event = time_events_.top();
+  if (!time_events_.empty() && todo_cnt < kMaxEventsSizePerWait) {
     std::int64_t current_time =
         std::chrono::duration_cast<std::chrono::milliseconds>(
             (std::chrono::steady_clock::now()).time_since_epoch())
             .count();
-    if (current_time >= top_event->GetWakeupTime()) {
-      todo_events[todo_cnt] = top_event;
+    while (!time_events_.empty() && todo_cnt < kMaxEventsSizePerWait &&
+           current_time >= time_events_.top()->GetWakeupTime()) {
+      todo_events[todo_cnt] = time_events_.top();
       time_events_.pop();
       todo_cnt++;
     }
@@ -196,7 +195,7 @@ void Poller::TrimTimeEvents() {
   if (time_events_.empty()) {
     next_wait_timeout_ = -1;  // wait infinitely if no time event
     return;
-  }  
+  }
   auto top_event = time_events_.top();
   std::int64_t current_time =
       std::chrono::duration_cast<std::chrono::milliseconds>(

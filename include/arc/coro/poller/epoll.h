@@ -70,11 +70,9 @@ class Poller : public io::detail::IOBase {
 
   int next_wait_timeout_ = -1;
 
-  int total_io_events_{0};
-
-  std::unordered_set<int> interesting_fds_{};
-
   // io events
+  int total_io_events_{0};
+  std::unordered_set<int> interesting_fds_{};
   // {fd -> {io_type -> [events]}}
   std::vector<std::vector<std::deque<events::IOEvent*>>> io_events_{
       kMaxFdInArray_, std::vector<std::deque<events::IOEvent*>>{
@@ -87,6 +85,8 @@ class Poller : public io::detail::IOBase {
 
   // time events
   std::priority_queue<events::TimeEvent*, std::vector<events::TimeEvent*>, events::TimeEventComparator> time_events_;
+
+  // conditional events
 
   // epoll related
   epoll_event events_[kMaxEventsSizePerWait];
