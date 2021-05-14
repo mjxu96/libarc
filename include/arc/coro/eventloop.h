@@ -33,6 +33,7 @@
 #include <arc/coro/dispatcher.h>
 #include <arc/coro/events/io_event.h>
 #include <arc/coro/events/time_event.h>
+#include <arc/coro/events/condition_event.h>
 #include <arc/io/io_base.h>
 #include <arc/utils/bits.h>
 #include <assert.h>
@@ -85,7 +86,12 @@ class EventLoop {
     poller_->AddTimeEvent(event);
   }
 
+  inline void AddUserEvent(events::UserEvent* event) {
+    poller_->AddUserEvent(event);
+  }
+
   inline void RemoveAllIOEvents(int fd) { poller_->RemoveAllIOEvents(fd); }
+  inline int GetEventWakeupHandler() const { return poller_->GetEventWakeupHandler(); }
 
   void AddToCleanUpCoroutine(std::coroutine_handle<> handle);
   void CleanUpFinishedCoroutines();

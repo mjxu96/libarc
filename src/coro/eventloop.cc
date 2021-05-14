@@ -35,7 +35,7 @@ using namespace arc::coro;
 EventLoop::EventLoop() : poller_(&detail::GetLocalPoller()) {}
 
 bool EventLoop::IsDone() {
-  return (poller_->RemainedEvents() <= 0) &&
+  return (poller_->IsPollerClean()) &&
          (to_dispatched_coroutines_.empty() ||
           type_ != EventLoopType::PRODUCER);
 }
@@ -43,6 +43,7 @@ bool EventLoop::IsDone() {
 void EventLoop::InitDo() {
   poller_->TrimIOEvents();
   poller_->TrimTimeEvents();
+  poller_->TrimUserEvents();
 }
 
 void EventLoop::Do() {
@@ -55,7 +56,7 @@ void EventLoop::Do() {
 
   CleanUpFinishedCoroutines();
 
-  if ((poller_->RemainedEvents() <= 0)) {
+  if ((poller_->IsPollerClean())) {
     assert(to_clean_up_handles_.empty());
     while (!to_dispatched_coroutines_.empty() &&
            type_ != EventLoopType::PRODUCER) {
@@ -74,6 +75,7 @@ void EventLoop::Do() {
 
   poller_->TrimIOEvents();
   poller_->TrimTimeEvents();
+  poller_->TrimUserEvents();
 }
 
 void EventLoop::AddToCleanUpCoroutine(std::coroutine_handle<> handle) {

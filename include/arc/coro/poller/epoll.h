@@ -33,6 +33,7 @@
 
 #include <arc/coro/events/io_event.h>
 #include <arc/coro/events/time_event.h>
+#include <arc/coro/events/condition_event.h>
 #include <arc/io/io_base.h>
 #include <sys/epoll.h>
 
@@ -41,6 +42,7 @@
 #include <queue>
 #include <unordered_set>
 #include <vector>
+#include <list>
 
 namespace arc {
 namespace coro {
@@ -49,10 +51,11 @@ namespace detail {
 class Poller : public io::detail::IOBase {
  public:
   Poller();
-  ~Poller() = default;
+  ~Poller();
 
   void AddIOEvent(events::IOEvent* event);
   void AddTimeEvent(events::TimeEvent* event);
+  void AddUserEvent(events::UserEvent* event);
 
   void RemoveAllIOEvents(int target_fd);
 
@@ -60,8 +63,14 @@ class Poller : public io::detail::IOBase {
 
   void TrimIOEvents();
   void TrimTimeEvents();
+  void TrimUserEvents();
 
-  inline int RemainedEvents() const { return total_io_events_ + time_events_.size(); }
+  inline bool IsPollerClean() const {
+    return (total_io_events_ + time_events_.size() + user_events_.size() == 0) || is_user_event_permanent_;
+  }
+
+  inline int GetEventWakeupHandler() const { return event_fd_; }
+  inline void SetPermanentUserEvent(bool is_permanent = true) { is_user_event_permanent_ = is_permanent; }
 
   const static int kMaxEventsSizePerWait = 1024;
 
@@ -86,7 +95,12 @@ class Poller : public io::detail::IOBase {
   // time events
   std::priority_queue<events::TimeEvent*, std::vector<events::TimeEvent*>, events::TimeEventComparator> time_events_;
 
-  // conditional events
+  // user events
+  int event_fd_{-1};
+  std::uint64_t event_read_{0};
+  bool is_user_event_permanent_{false};
+  bool is_event_fd_added_{false};
+  std::list<events::UserEvent*> user_events_;
 
   // epoll related
   epoll_event events_[kMaxEventsSizePerWait];

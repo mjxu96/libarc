@@ -60,7 +60,7 @@ Task<void> HandleClient(
     Socket<Domain::IPV4, Protocol::TCP, Pattern::ASYNC> sock) {
   std::shared_ptr<char[]> data(new char[1024]);
   auto local_addr = sock.GetPeerAddress();
-  std::cout << "client ip: " << local_addr.GetHost() << " port: " << local_addr.GetPort() << std::endl;
+  // std::cout << "client ip: " << local_addr.GetHost() << " port: " << local_addr.GetPort() << std::endl;
   try {
     std::string received;
     bool connection_alive = true;
@@ -89,7 +89,7 @@ Task<void> HandleClient(
 Task<void> HandleClient(TLSSocket<Domain::IPV4, Pattern::ASYNC> sock) {
   std::shared_ptr<char[]> data(new char[1024]);
   auto local_addr = sock.GetPeerAddress();
-  std::cout << "client ip: " << local_addr.GetHost() << " port: " << local_addr.GetPort() << std::endl;
+  // std::cout << "client ip: " << local_addr.GetHost() << " port: " << local_addr.GetPort() << std::endl;
   try {
     std::string received;
     bool connection_alive = true;
@@ -256,6 +256,6 @@ int main(int argc, char** argv) {
   std::cout << "finished" << std::endl;
   StartEventLoop(Connect());
   StartEventLoop(TLSConnect());
-  // StartEventLoop(Listen());
-  StartEventLoop(TLSAccept());
+  StartEventLoop(Listen());
+  // StartEventLoop(TLSAccept());
 }

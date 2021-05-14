@@ -28,6 +28,7 @@
 
 #include <arc/coro/poller/epoll.h>
 #include <arc/exception/io.h>
+#include <sys/eventfd.h>
 
 #include <iostream>
 
@@ -39,8 +40,18 @@ Poller::Poller() {
   if (fd_ < 0) {
     throw arc::exception::IOException("Epoll Creation Error");
   }
+  event_fd_ = eventfd(0, EFD_NONBLOCK);
+  if (event_fd_ < 0) {
+    throw arc::exception::IOException("EventFd Creation Error");
+  }
   interesting_fds_.reserve(kMaxFdInArray_);
   std::fill(std::begin(io_prev_events_), std::end(io_prev_events_), 0);
+}
+
+Poller::~Poller() {
+  if (event_fd_ >= 0) {
+    close(event_fd_);
+  }
 }
 
 int Poller::WaitEvents(events::EventBase** todo_events) {
@@ -48,9 +59,16 @@ int Poller::WaitEvents(events::EventBase** todo_events) {
       epoll_wait(fd_, events_, kMaxEventsSizePerWait, next_wait_timeout_);
   int todo_cnt = 0;
 
+  bool is_user_event_triggered = false;
+
   // io events
   for (int i = 0; i < event_cnt; i++) {
     int fd = events_[i].data.fd;
+    if (fd == event_fd_) {
+      is_user_event_triggered = true;
+      assert(events_[i].events & EPOLLIN);
+      continue;
+    }
     int event_type = events_[i].events;
     if (event_type & EPOLLIN) {
       todo_events[todo_cnt] = PopIOEvent(fd, io::IOType::READ);
@@ -78,6 +96,36 @@ int Poller::WaitEvents(events::EventBase** todo_events) {
       todo_events[todo_cnt] = time_events_.top();
       time_events_.pop();
       todo_cnt++;
+    }
+  }
+
+  // user events
+  if (is_user_event_triggered) {
+    int read_bytes = read(event_fd_, &event_read_, sizeof(event_read_));
+    if (read_bytes != sizeof(event_read_)) {
+      throw arc::exception::IOException("Read user event error");
+    }
+    auto itr = user_events_.begin();
+    while (itr != user_events_.end()) {
+      auto user_event = (*itr);
+      if (todo_cnt < kMaxEventsSizePerWait) {
+        if (user_event->CanResume()) {
+          todo_events[todo_cnt] = user_event;
+          todo_cnt++;
+          itr = user_events_.erase(itr);
+          continue;
+        } else {
+          itr++;
+        }
+      } else {
+        // need to do it in the next wait routine
+        event_read_ = 1;
+        int wrote = write(event_fd_, &event_read_, sizeof(event_read_));
+        if (wrote != sizeof(event_read_)) {
+          throw arc::exception::IOException("Write user event in epoll wait error");
+        }
+        break;
+      }
     }
   }
 
@@ -109,6 +157,11 @@ void Poller::AddIOEvent(events::IOEvent* event) {
 
 void Poller::AddTimeEvent(events::TimeEvent* event) {
   time_events_.push(event);
+}
+
+void Poller::AddUserEvent(events::UserEvent* event) {
+  event->ArmEvent(event_fd_);
+  user_events_.push_back(event);
 }
 
 void Poller::RemoveAllIOEvents(int target_fd) {
@@ -189,6 +242,22 @@ void Poller::TrimIOEvents() {
       throw arc::exception::IOException("Epoll Error When Trimming IO Events");
     }
   }
+}
+
+void Poller::TrimUserEvents() {
+  bool should_add_epoll = (is_user_event_permanent_ || !user_events_.empty());
+  if (is_event_fd_added_ == should_add_epoll) {
+    return;
+  }
+  int op = should_add_epoll ? EPOLL_CTL_ADD : EPOLL_CTL_DEL;
+  epoll_event e_event{};
+  e_event.events = EPOLLIN;
+  e_event.data.fd = event_fd_;
+  int epoll_ret = epoll_ctl(fd_, op, event_fd_, &e_event);
+  if (epoll_ret != 0) {
+    throw arc::exception::IOException("Epoll Error When Trimming User Events");
+  }
+  is_event_fd_added_ = should_add_epoll;
 }
 
 void Poller::TrimTimeEvents() {
