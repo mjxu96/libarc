@@ -26,6 +26,7 @@
  * IN THE SOFTWARE.
  */
 
+#include <iostream>
 #include <arc/coro/task.h>
 #include <arc/io/socket.h>
 #include <arc/io/tls_socket.h>

@@ -30,8 +30,10 @@
 #define LIBARC__CORO__LOCKS__CONDITION_H
 
 #include <arc/coro/awaiter/condition_awaiter.h>
+#include <arc/coro/task.h>
 #include <arc/exception/io.h>
-#include <unordered_set>
+
+#include "lock.h"
 
 namespace arc {
 namespace coro {
@@ -39,32 +41,21 @@ namespace coro {
 class Condition {
  public:
   Condition() {
-    static_assert(sizeof(i) == 8);
     core_ = new arc::events::detail::ConditionCore();
   }
 
   void NotifyOne() {
-    std::lock_guard guard(core_->lock);
-    if (core_->registered_count <= 0) {
-      return;
-    }
-    if (write(ModifyConditionCore(), &i, sizeof(i)) != sizeof(i)) {
-      std::cout << errno << std::endl;
-      throw arc::exception::IOException("NotifyOne Error");
-    }
+    core_->TriggerOne();
   }
 
   void NotifyAll() {
-    std::lock_guard guard(core_->lock);
-    std::unordered_set<int> to_notified_event_ids;
-    while (core_->registered_count > 0) {
-      to_notified_event_ids.insert(ModifyConditionCore());
-    }
-    for (int to_notified_event_id : to_notified_event_ids) {
-      if (write(to_notified_event_id, &i, sizeof(i)) != sizeof(i)) {
-        throw arc::exception::IOException("NotifyOne Error");
-      }
-    }
+    core_->TriggerAll();
+  }
+
+  Task<void> Wait(Lock& lock) {
+    lock.Release();
+    co_await ConditionAwaiter(core_);
+    co_await lock.Acquire();
   }
 
   ConditionAwaiter Wait() {
@@ -83,28 +74,8 @@ class Condition {
 
  private:
   arc::events::detail::ConditionCore* core_{nullptr};
-  std::uint64_t i{1};
-
-  int ModifyConditionCore() {
-    int event_id = core_->in_queue_event_ids.front();
-    core_->in_queue_event_ids.pop_front();
-
-    core_->registered_count--;
-    core_->registered_events[event_id]--;
-    if (core_->registered_events[event_id] == 0) {
-      core_->registered_events.erase(event_id);
-    }
-
-    core_->triggered_count++;
-    if (core_->triggered_events.find(event_id) == core_->triggered_events.end()) {
-      core_->triggered_events[event_id] = 0;
-    }
-    core_->triggered_events[event_id]++;
-
-    return event_id;
-  }
 };
-  
+
 } // namespace coro
 } // namespace arc
 

@@ -30,8 +30,6 @@
 #include <arc/exception/io.h>
 #include <sys/eventfd.h>
 
-#include <iostream>
-
 using namespace arc;
 using namespace arc::coro::detail;
 
@@ -160,7 +158,6 @@ void Poller::AddTimeEvent(events::TimeEvent* event) {
 }
 
 void Poller::AddUserEvent(events::UserEvent* event) {
-  event->ArmEvent(event_fd_);
   user_events_.push_back(event);
 }
 

@@ -1,7 +1,7 @@
 /*
- * File: user_event.h
+ * File: lock.h
  * Project: libarc
- * File Created: Friday, 14th May 2021 11:08:55 pm
+ * File Created: Saturday, 15th May 2021 10:36:41 am
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
@@ -26,29 +26,45 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef LIBARC__CORO__EVENTS__USER_EVENT_H
-#define LIBARC__CORO__EVENTS__USER_EVENT_H
+#ifndef LIBARC__CORO__LOCKS__LOCK_H
+#define LIBARC__CORO__LOCKS__LOCK_H
 
-#include "event_base.h"
+#include <arc/coro/awaiter/lock_awaiter.h>
 
 namespace arc {
-namespace events {
+namespace coro {
 
-#ifdef __linux__
-using EventHandleType = int;
-#endif
-
-class UserEvent : public EventBase {
+class Lock {
  public:
-  UserEvent(EventHandleType event_handle, std::coroutine_handle<void> handle) : EventBase(handle), event_handle_(event_handle) {}
-  ~UserEvent() = default;
-  virtual bool CanResume() { return true; }
-  virtual EventHandleType GetEventHandle() const { return event_handle_; }
- protected:
-  EventHandleType event_handle_{-1};
+  Lock() {
+    core_ = new arc::events::detail::LockCore();
+  }
+  ~Lock() {
+    delete core_;
+  }
+
+  // Lock cannot be copied nor moved.
+  Lock(const Lock&) = delete;
+  Lock& operator=(const Lock&) = delete;
+  Lock(Lock&&) = delete;
+  Lock& operator=(Lock&&) = delete;
+
+  LockAwaiter Acquire() {
+    return LockAwaiter(core_);
+  }
+
+  void Release() {
+    core_->Unlock();
+  }
+
+  friend class Condition;
+
+ private:
+  arc::events::detail::LockCore* core_{nullptr};
 };
 
-} // namespace events
+} // namespace coro
 } // namespace arc
+
 
 #endif

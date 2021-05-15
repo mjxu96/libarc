@@ -33,11 +33,10 @@
 #include <arc/coro/dispatcher.h>
 #include <arc/coro/events/io_event.h>
 #include <arc/coro/events/time_event.h>
-#include <arc/coro/events/condition_event.h>
+#include <arc/coro/events/user_event.h>
 #include <arc/io/io_base.h>
 #include <arc/utils/bits.h>
 #include <assert.h>
-#include <sys/epoll.h>
 
 #ifdef __linux__
 #include <arc/coro/poller/epoll.h>
@@ -51,11 +50,7 @@ using experimental::coroutine_handle;
 #else
 #include <coroutine>
 #endif
-#include <iostream>
-#include <list>
-#include <queue>
-#include <unordered_map>
-#include <unordered_set>
+#include <vector>
 
 namespace arc {
 namespace coro {
@@ -91,7 +86,7 @@ class EventLoop {
   }
 
   inline void RemoveAllIOEvents(int fd) { poller_->RemoveAllIOEvents(fd); }
-  inline int GetEventWakeupHandler() const { return poller_->GetEventWakeupHandler(); }
+  inline events::EventHandleType GetEventHandle() const { return poller_->GetEventHandle(); }
 
   void AddToCleanUpCoroutine(std::coroutine_handle<> handle);
   void CleanUpFinishedCoroutines();

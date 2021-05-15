@@ -29,7 +29,6 @@
 #ifndef LIBARC__CORO__TASK_H
 #define LIBARC__CORO__TASK_H
 
-// TODO add support for clang
 #include <arc/concept/coro.h>
 #include <arc/coro/awaiter/time_awaiter.h>
 #include <arc/coro/eventloop.h>
@@ -47,7 +46,6 @@ using experimental::suspend_never;
 #include <coroutine>
 #endif
 #include <exception>
-#include <iostream>
 #include <string>
 
 namespace arc {

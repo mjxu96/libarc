@@ -26,6 +26,10 @@
  * IN THE SOFTWARE.
  */
 
+#ifndef LIBARC__TESTS__TEST_CORO_H
+#define LIBARC__TESTS__TEST_CORO_H
+
+#include "utils.h"
 
 #include <arc/coro/eventloop.h>
 #include <arc/coro/task.h>
@@ -36,6 +40,14 @@ namespace test {
 
 class BasicCoroTest : public ::testing::Test {
  protected:
+  float max_allowed_ref_error_{0.01};
+
+  void virtual SetUp() override {
+    if (IsRunningWithValgrind()) {
+      max_allowed_ref_error_ = 0.2;
+    }
+  }
+
   coro::Task<int> ReturnInt(int i) {
     if (i == 1) {
       co_return 1;
@@ -69,14 +81,13 @@ class BasicCoroTest : public ::testing::Test {
   }
 
   coro::Task<void> TimerTestCoro(int milliseconds) {
-    const float kMaxAllowedRefError = 0.05;
     auto now = std::chrono::steady_clock::now();
     co_await arc::coro::SleepFor(std::chrono::milliseconds(milliseconds));
     auto then = std::chrono::steady_clock::now();
     auto elapsed =
         std::chrono::duration_cast<std::chrono::milliseconds>(then - now)
             .count();
-    EXPECT_NEAR(milliseconds, elapsed, (milliseconds * kMaxAllowedRefError));
+    EXPECT_NEAR(milliseconds, elapsed, (milliseconds * max_allowed_ref_error_));
 
     now = then;
     milliseconds = 1000 - milliseconds;
@@ -85,7 +96,7 @@ class BasicCoroTest : public ::testing::Test {
     elapsed =
         std::chrono::duration_cast<std::chrono::milliseconds>(then - now)
             .count();
-    EXPECT_NEAR(milliseconds, elapsed, ((milliseconds) * kMaxAllowedRefError));
+    EXPECT_NEAR(milliseconds, elapsed, (milliseconds * max_allowed_ref_error_));
     co_return;
   }
 
@@ -132,7 +143,4 @@ TEST_F(BasicCoroTest, ExceptionTest) {
 }  // namespace test
 }  // namespace arc
 
-int main(int argc, char** argv) {
-  ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}
+#endif

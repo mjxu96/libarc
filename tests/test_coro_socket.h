@@ -26,6 +26,11 @@
  * IN THE SOFTWARE.
  */
 
+#ifndef LIBARC__TESTS__TEST_CORO_SOCKET_H
+#define LIBARC__TESTS__TEST_CORO_SOCKET_H
+
+#include "utils.h"
+
 #include <arc/coro/eventloop.h>
 #include <arc/coro/task.h>
 #include <arc/io/socket.h>
@@ -71,13 +76,16 @@ class SocketCoroTest : public ::testing::Test {
   const static int kMinSleepTime_ = 100;
   constexpr static int kExpectedRepeatTimes_ = 5;
 
-  constexpr static float kMaxAllowedRefError_ = 0.05;
+  float max_allowed_ref_error_ = 0.01;
   int clients_sleep_time_[kClientsCount_] = {0};
 
   std::string key_dir_;
 
   virtual void SetUp() override {
-    key_dir_ = std::getenv("HOME") + std::string("/data/keys/");
+    key_dir_ = GetHomeDir() + std::string("/data/keys/");
+    if (IsRunningWithValgrind()) {
+      max_allowed_ref_error_ = 0.2;
+    }
     std::srand(std::time(nullptr));
     for (int i = 0; i < kClientsCount_; i++) {
       clients_sleep_time_[i] =
@@ -179,10 +187,12 @@ class SocketCoroTest : public ::testing::Test {
       auto then = std::chrono::steady_clock::now();
 
       EXPECT_EQ(recv, received_size_per_read);
+
+      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(then - now)
+              .count();
       EXPECT_NEAR(
-          std::chrono::duration_cast<std::chrono::milliseconds>(then - now)
-              .count(),
-          expected_sleep_time, expected_sleep_time * kMaxAllowedRefError_);
+          elapsed,
+          expected_sleep_time, expected_sleep_time * max_allowed_ref_error_);
 
       received.append(data.get(), received_size_per_read);
       EXPECT_EQ(received, transferred_string_);
@@ -238,7 +248,4 @@ TYPED_TEST(SocketCoroTest, BasicSocketTest) {
 }  // namespace test
 }  // namespace arc
 
-int main(int argc, char** argv) {
-  ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}
+#endif

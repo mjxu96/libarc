@@ -1,7 +1,7 @@
 /*
- * File: user_event.h
+ * File: test_main.cc
  * Project: libarc
- * File Created: Friday, 14th May 2021 11:08:55 pm
+ * File Created: Saturday, 15th May 2021 9:46:05 am
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
@@ -26,29 +26,11 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef LIBARC__CORO__EVENTS__USER_EVENT_H
-#define LIBARC__CORO__EVENTS__USER_EVENT_H
+#include "test_coro.h"
+#include "test_coro_socket.h"
+#include "test_coro_lock.h"
 
-#include "event_base.h"
-
-namespace arc {
-namespace events {
-
-#ifdef __linux__
-using EventHandleType = int;
-#endif
-
-class UserEvent : public EventBase {
- public:
-  UserEvent(EventHandleType event_handle, std::coroutine_handle<void> handle) : EventBase(handle), event_handle_(event_handle) {}
-  ~UserEvent() = default;
-  virtual bool CanResume() { return true; }
-  virtual EventHandleType GetEventHandle() const { return event_handle_; }
- protected:
-  EventHandleType event_handle_{-1};
-};
-
-} // namespace events
-} // namespace arc
-
-#endif
+int main(int argc, char** argv) {
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}

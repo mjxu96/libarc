@@ -69,7 +69,7 @@ class Poller : public io::detail::IOBase {
     return (total_io_events_ + time_events_.size() + user_events_.size() == 0) || is_user_event_permanent_;
   }
 
-  inline int GetEventWakeupHandler() const { return event_fd_; }
+  inline int GetEventHandle() const { return event_fd_; }
   inline void SetPermanentUserEvent(bool is_permanent = true) { is_user_event_permanent_ = is_permanent; }
 
   const static int kMaxEventsSizePerWait = 1024;

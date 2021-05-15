@@ -26,10 +26,11 @@
  * IN THE SOFTWARE.
  */
 
+#include <iostream>
+#include <memory>
 #include <arc/arc.h>
 #include <arc/coro/task.h>
 
-#include <memory>
 
 using namespace arc::coro;
 

@@ -29,11 +29,14 @@
 #ifndef LIBARC__CORO__EVENTS__CONDITION_EVENT_H
 #define LIBARC__CORO__EVENTS__CONDITION_EVENT_H
 
-#include <mutex>
-#include <deque>
-#include <unordered_map>
+#include <arc/exception/io.h>
 
-#include "user_event.h"
+#include <deque>
+#include <mutex>
+#include <unordered_map>
+#include <unordered_set>
+
+#include "lock_event.h"
 
 namespace arc {
 
@@ -41,61 +44,109 @@ namespace events {
 
 namespace detail {
 
-struct ConditionCore {
-  std::mutex lock;
-  int triggered_count{0};
-  int registered_count{0};
-  // eventfd -> event counts in the fd
-  std::unordered_map<int, int> registered_events;
-  std::unordered_map<int, int> triggered_events;
-
-  std::deque<int> in_queue_event_ids;
-};
-
-}  // namespace detail
-
-class ConditionEvent : public UserEvent {
+class ConditionCore {
  public:
-  ConditionEvent(detail::ConditionCore* core,
-                 std::coroutine_handle<void> handle)
-      : UserEvent(handle),
-        core_(core),
-        event_id_(-1) {
-    std::lock_guard guard(core_->lock);
+  ConditionCore() = default;
+  ~ConditionCore() = default;
+
+  void Register(EventHandleType event_handle) {
+    std::lock_guard guard(lock_);
+    if (registered_events_.find(event_handle) == registered_events_.end()) {
+      registered_events_[event_handle] = 0;
+    }
+    registered_events_[event_handle]++;
+    registered_count_++;
+    in_queue_event_handles_.push_back(event_handle);
   }
 
-  virtual ~ConditionEvent() = default;
-
-  virtual bool CanResume() override {
-    std::lock_guard guard(core_->lock);
-    if (core_->triggered_count > 0 && core_->triggered_events.find(event_id_) !=
-                                          core_->triggered_events.end()) {
-      core_->triggered_count--;
-      core_->triggered_events[event_id_]--;
-      assert(core_->triggered_events[event_id_] >= 0);
-      if (core_->triggered_events[event_id_] == 0) {
-        core_->triggered_events.erase(event_id_);
+  bool CanDeregister(EventHandleType event_handle) {
+    std::lock_guard guard(lock_);
+    if (triggered_count_ > 0 &&
+        triggered_events_.find(event_handle) != triggered_events_.end()) {
+      triggered_count_--;
+      triggered_events_[event_handle]--;
+      assert(triggered_events_[event_handle] >= 0);
+      if (triggered_events_[event_handle] == 0) {
+        triggered_events_.erase(event_handle);
       }
       return true;
     }
     return false;
   }
 
-  virtual void ArmEvent(int event_id) override {
-    event_id_ = event_id;
-    std::lock_guard guard(core_->lock);
-    if (core_->registered_events.find(event_id_) ==
-        core_->registered_events.end()) {
-      core_->registered_events[event_id_] = 0;
+  void TriggerOne() {
+    std::lock_guard guard(lock_);
+    if (registered_count_ <= 0) {
+      return;
     }
-    core_->registered_events[event_id_]++;
-    core_->registered_count++;
-    core_->in_queue_event_ids.push_back(event_id_);
+    if (write(TriggerInternal(), &i_, sizeof(i_)) != sizeof(i_)) {
+      throw arc::exception::IOException("NotifyOne Error");
+    }
+  }
+
+  void TriggerAll() {
+    std::lock_guard guard(lock_);
+    std::unordered_set<int> to_notified_event_ids;
+    while (registered_count_ > 0) {
+      to_notified_event_ids.insert(TriggerInternal());
+    }
+    for (int to_notified_event_id : to_notified_event_ids) {
+      if (write(to_notified_event_id, &i_, sizeof(i_)) != sizeof(i_)) {
+        throw arc::exception::IOException("NotifyOne Error");
+      }
+    }
+  }
+
+ private:
+  int TriggerInternal() {
+    EventHandleType event_handle = in_queue_event_handles_.front();
+    in_queue_event_handles_.pop_front();
+
+    registered_count_--;
+    registered_events_[event_handle]--;
+    if (registered_events_[event_handle] == 0) {
+      registered_events_.erase(event_handle);
+    }
+
+    triggered_count_++;
+    if (triggered_events_.find(event_handle) == triggered_events_.end()) {
+      triggered_events_[event_handle] = 0;
+    }
+    triggered_events_[event_handle]++;
+
+    return event_handle;
+  }
+
+  std::mutex lock_;
+  int triggered_count_{0};
+  int registered_count_{0};
+  // event handle -> event counts in the fd
+  std::unordered_map<EventHandleType, int> registered_events_;
+  std::unordered_map<EventHandleType, int> triggered_events_;
+
+  std::deque<EventHandleType> in_queue_event_handles_;
+  std::uint64_t i_{1};
+  static_assert(sizeof(i_) == 8U);
+};
+
+}  // namespace detail
+
+class ConditionEvent : public UserEvent {
+ public:
+  ConditionEvent(detail::ConditionCore* core, EventHandleType event_handle,
+                 std::coroutine_handle<void> handle)
+      : UserEvent(event_handle, handle), core_(core) {
+    core_->Register(event_handle_);
+  }
+
+  virtual ~ConditionEvent() = default;
+
+  virtual bool CanResume() override {
+    return core_->CanDeregister(event_handle_);
   }
 
  private:
   detail::ConditionCore* core_{nullptr};
-  int event_id_{-1};
 };
 
 }  // namespace events
