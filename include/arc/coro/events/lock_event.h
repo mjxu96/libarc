@@ -65,6 +65,9 @@ class LockCore {
     std::lock_guard guard(lock_);
     if (is_locked_) {
       assert(triggered_handle_ != -1);
+      if (is_instantly) {
+        pending_event_handles_.push(event_handle);
+      }
       return false;
     } else {
       if (is_instantly) {
@@ -73,6 +76,7 @@ class LockCore {
           is_locked_ = true;
           return true;
         }
+        pending_event_handles_.push(event_handle);
         return false;
       }
       if (triggered_handle_ != event_handle) {
@@ -82,11 +86,6 @@ class LockCore {
       is_locked_ = true;
       return true;
     }
-  }
-
-  void Register(EventHandleType event_handle) {
-    std::lock_guard guard(lock_);
-    pending_event_handles_.push(event_handle);
   }
 
  private:
@@ -103,9 +102,7 @@ class LockEvent : public UserEvent {
  public:
   LockEvent(detail::LockCore* core, EventHandleType event_handle,
             std::coroutine_handle<void> handle)
-      : UserEvent(event_handle, handle), core_(core) {
-    core_->Register(event_handle_);
-  }
+      : UserEvent(event_handle, handle), core_(core) {}
 
   virtual bool CanResume() override {
     return core_->CanLock(event_handle_, false);

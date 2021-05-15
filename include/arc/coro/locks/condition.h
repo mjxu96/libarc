@@ -53,13 +53,12 @@ class Condition {
   }
 
   Task<void> Wait(Lock& lock) {
-    lock.Release();
-    co_await ConditionAwaiter(core_);
+    co_await ConditionAwaiter(core_, lock.core_);
     co_await lock.Acquire();
   }
 
   ConditionAwaiter Wait() {
-    return ConditionAwaiter(core_);
+    return ConditionAwaiter(core_, nullptr);
   }
 
   ~Condition() {

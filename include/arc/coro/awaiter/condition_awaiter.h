@@ -31,13 +31,16 @@
 
 #include <arc/coro/eventloop.h>
 #include <arc/coro/events/condition_event.h>
+#include <arc/coro/events/lock_event.h>
 
 namespace arc {
 namespace coro {
 
 class [[nodiscard]] ConditionAwaiter {
  public:
-  ConditionAwaiter(arc::events::detail::ConditionCore* core) : core_(core) {}
+  ConditionAwaiter(arc::events::detail::ConditionCore* core,
+                   arc::events::detail::LockCore* lock_core)
+      : core_(core), lock_core_(lock_core) {}
 
   bool await_ready() { return false; }
 
@@ -45,12 +48,16 @@ class [[nodiscard]] ConditionAwaiter {
   void await_suspend(std::coroutine_handle<PromiseType> handle) {
     GetLocalEventLoop().AddUserEvent(new events::ConditionEvent(
         core_, GetLocalEventLoop().GetEventHandle(), handle));
+    if (lock_core_) {
+      lock_core_->Unlock();
+    }
   }
 
   void await_resume() {}
 
  private:
   arc::events::detail::ConditionCore* core_{nullptr};
+  arc::events::detail::LockCore* lock_core_{nullptr};
 };
 
 }  // namespace coro

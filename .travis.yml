@@ -61,4 +61,4 @@ script:
   - mkdir build && cd build
   - cmake ../ -DCMAKE_BUILD_TYPE="${ARC_CMAKE_BUILD_TYPE}" -DARC_BUILD_TESTS=ON && make -j2
   # set timeout to 1 minute
-  - travis_wait 1 ./cmake/tests/test_main
+  - travis_wait 2 ./cmake/tests/test_main

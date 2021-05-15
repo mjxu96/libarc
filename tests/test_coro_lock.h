@@ -139,9 +139,9 @@ TEST_F(LockCoroTest, BasicLockTest) {
 }
 
 TEST_F(LockCoroTest, BasicLockMultiThreadTest) {
-  int thread_num = 10;
+  int thread_num = 20;
   int run_times = 10;
-  int per_num = 2;
+  int per_num = 4;
   auto elapsed = GetElapsedTimeMilliseconds(
       std::bind(&LockCoroTest::RunMultipleLockCorosInMultithreads, this,
                 thread_num, run_times, per_num));
@@ -151,7 +151,7 @@ TEST_F(LockCoroTest, BasicLockMultiThreadTest) {
 
 TEST_F(LockCoroTest, BasicCondMultiThreadTest) {
   int thread_num = 20;
-  int run_times = 10;
+  int run_times = 20;
   arc::coro::StartEventLoop(RunMultipleCondCorosInMultithreads(thread_num,
   run_times));
 }
