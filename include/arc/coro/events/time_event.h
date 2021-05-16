@@ -44,13 +44,14 @@ class TimeEvent : public EventBase {
 
   const inline std::int64_t GetWakeupTime() const { return wakeup_time_; }
   friend class TimeEventComparator;
+
  private:
   std::int64_t wakeup_time_ = 0;
 };
 
 class TimeEventComparator {
  public:
-  bool operator() (TimeEvent* event1, TimeEvent* event2) {
+  bool operator()(TimeEvent* event1, TimeEvent* event2) {
     return event1->wakeup_time_ > event2->wakeup_time_;
   }
 };

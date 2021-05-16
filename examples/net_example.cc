@@ -26,9 +26,8 @@
  * IN THE SOFTWARE.
  */
 
-#include <iostream>
 #include <arc/net/address.h>
-
+#include <iostream>
 
 using namespace arc::net;
 

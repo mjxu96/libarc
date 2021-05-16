@@ -38,8 +38,8 @@ namespace coro {
 
 class [[nodiscard]] ConditionAwaiter {
  public:
-  ConditionAwaiter(arc::events::detail::ConditionCore* core,
-                   arc::events::detail::LockCore* lock_core)
+  ConditionAwaiter(arc::events::detail::ConditionCore * core,
+                   arc::events::detail::LockCore * lock_core)
       : core_(core), lock_core_(lock_core) {}
 
   bool await_ready() { return false; }

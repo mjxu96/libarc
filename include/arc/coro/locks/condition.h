@@ -6,17 +6,17 @@
  * -----
  * MIT License
  * Copyright (c) 2020 Minjun Xu
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
  * deal in the Software without restriction, including without limitation the
  * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
  * sell copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -40,30 +40,20 @@ namespace coro {
 
 class Condition {
  public:
-  Condition() {
-    core_ = new arc::events::detail::ConditionCore();
-  }
+  Condition() { core_ = new arc::events::detail::ConditionCore(); }
 
-  void NotifyOne() {
-    core_->TriggerOne();
-  }
+  void NotifyOne() { core_->TriggerOne(); }
 
-  void NotifyAll() {
-    core_->TriggerAll();
-  }
+  void NotifyAll() { core_->TriggerAll(); }
 
   Task<void> Wait(Lock& lock) {
     co_await ConditionAwaiter(core_, lock.core_);
     co_await lock.Acquire();
   }
 
-  ConditionAwaiter Wait() {
-    return ConditionAwaiter(core_, nullptr);
-  }
+  ConditionAwaiter Wait() { return ConditionAwaiter(core_, nullptr); }
 
-  ~Condition() {
-    delete core_;
-  }
+  ~Condition() { delete core_; }
 
   // Condition cannot be copied nor moved.
   Condition(const Condition&) = delete;
@@ -75,8 +65,7 @@ class Condition {
   arc::events::detail::ConditionCore* core_{nullptr};
 };
 
-} // namespace coro
-} // namespace arc
-
+}  // namespace coro
+}  // namespace arc
 
 #endif

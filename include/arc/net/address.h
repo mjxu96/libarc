@@ -108,7 +108,7 @@ class Address {
           " address");
     }
     addr_ = addr;
-    char tmp[INET6_ADDRSTRLEN] = { 0 };
+    char tmp[INET6_ADDRSTRLEN] = {0};
     if constexpr (AF == Domain::IPV4) {
       inet_ntop(AF_INET, &(addr_.sin_addr), tmp, INET_ADDRSTRLEN);
     } else if constexpr (AF == Domain::IPV6) {

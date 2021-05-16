@@ -26,9 +26,9 @@
  * IN THE SOFTWARE.
  */
 
-#include <iostream>
 #include <arc/coro/locks/condition.h>
 #include <arc/coro/task.h>
+#include <iostream>
 
 #include <queue>
 
@@ -111,7 +111,7 @@ int main() {
   std::thread prod(std::bind(Produce, &coro_queue));
 
   std::vector<std::thread> cons_threads;
-  for (int i = 0; i < cons_num; i+=cons_num_per_thread) {
+  for (int i = 0; i < cons_num; i += cons_num_per_thread) {
     cons_threads.emplace_back(std::bind(Consume, &coro_queue, i));
   }
   // std::cout << cons_threads.size() << std::endl;

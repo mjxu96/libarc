@@ -50,8 +50,8 @@ using experimental::coroutine_handle;
 #else
 #include <coroutine>
 #endif
-#include <vector>
 #include <list>
+#include <vector>
 
 namespace arc {
 namespace coro {
@@ -74,9 +74,7 @@ class EventLoop {
   void InitDo();
   void Do();
 
-  inline void AddIOEvent(events::IOEvent* event) {
-    poller_->AddIOEvent(event);
-  }
+  inline void AddIOEvent(events::IOEvent* event) { poller_->AddIOEvent(event); }
 
   inline void AddTimeEvent(events::TimeEvent* event) {
     poller_->AddTimeEvent(event);
@@ -87,7 +85,9 @@ class EventLoop {
   }
 
   inline void RemoveAllIOEvents(int fd) { poller_->RemoveAllIOEvents(fd); }
-  inline events::EventHandleType GetEventHandle() const { return poller_->GetEventHandle(); }
+  inline events::EventHandleType GetEventHandle() const {
+    return poller_->GetEventHandle();
+  }
 
   void AddToCleanUpCoroutine(std::coroutine_handle<> handle);
   void CleanUpFinishedCoroutines();
@@ -98,12 +98,13 @@ class EventLoop {
 
  private:
   void Trim();
-  
+
   detail::Poller* poller_{nullptr};
 
   bool is_running_{false};
 
-  const static int kMaxEventsSizePerWait_ = detail::Poller::kMaxEventsSizePerWait;
+  const static int kMaxEventsSizePerWait_ =
+      detail::Poller::kMaxEventsSizePerWait;
   const static int kMaxConsumableCoroutineNum_ = 4;
 
   // poller related

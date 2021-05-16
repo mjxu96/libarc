@@ -188,11 +188,11 @@ class SocketCoroTest : public ::testing::Test {
 
       EXPECT_EQ(recv, received_size_per_read);
 
-      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(then - now)
+      auto elapsed =
+          std::chrono::duration_cast<std::chrono::milliseconds>(then - now)
               .count();
-      EXPECT_NEAR(
-          elapsed,
-          expected_sleep_time, expected_sleep_time * max_allowed_ref_error_);
+      EXPECT_NEAR(elapsed, expected_sleep_time,
+                  expected_sleep_time * max_allowed_ref_error_);
 
       received.append(data.get(), received_size_per_read);
       EXPECT_EQ(received, transferred_string_);
@@ -208,8 +208,7 @@ class SocketCoroTest : public ::testing::Test {
   template <typename UT = T>
   requires(UT::socket_type == SocketCoroTestType::TLS) AcceptorType
       InitAcceptor() {
-    return AcceptorType(key_dir_ + "cert.pem",
-                        key_dir_ + "key.pem");
+    return AcceptorType(key_dir_ + "cert.pem", key_dir_ + "key.pem");
   }
 
   coro::Task<void> Accept() {

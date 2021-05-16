@@ -31,18 +31,18 @@
 
 #ifdef __linux__
 
+#include <arc/coro/events/condition_event.h>
 #include <arc/coro/events/io_event.h>
 #include <arc/coro/events/time_event.h>
-#include <arc/coro/events/condition_event.h>
 #include <arc/io/io_base.h>
 #include <sys/epoll.h>
 
 #include <deque>
-#include <unordered_map>
+#include <list>
 #include <queue>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <list>
 
 namespace arc {
 namespace coro {
@@ -66,15 +66,15 @@ class Poller : public io::detail::IOBase {
   void TrimUserEvents();
 
   inline bool IsPollerClean() const {
-    return (total_io_events_ + time_events_.size() + user_events_.size() == 0) && (dispatch_fd_ == -1);
+    return (total_io_events_ + time_events_.size() + user_events_.size() ==
+            0) &&
+           (dispatch_fd_ == -1);
   }
 
   inline int GetEventHandle() const { return event_fd_; }
 
   int Register();
-  int GetDispatchedCount() const {
-    return dispatched_count_;
-  }
+  int GetDispatchedCount() const { return dispatched_count_; }
 
   const static int kMaxEventsSizePerWait = 1024;
 
@@ -97,7 +97,9 @@ class Poller : public io::detail::IOBase {
   std::unordered_map<int, int> extra_io_prev_events_{};
 
   // time events
-  std::priority_queue<events::TimeEvent*, std::vector<events::TimeEvent*>, events::TimeEventComparator> time_events_;
+  std::priority_queue<events::TimeEvent*, std::vector<events::TimeEvent*>,
+                      events::TimeEventComparator>
+      time_events_;
 
   // user events
   int event_fd_{-1};

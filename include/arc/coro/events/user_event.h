@@ -6,17 +6,17 @@
  * -----
  * MIT License
  * Copyright (c) 2020 Minjun Xu
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
  * deal in the Software without restriction, including without limitation the
  * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
  * sell copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -40,15 +40,17 @@ using EventHandleType = int;
 
 class UserEvent : public EventBase {
  public:
-  UserEvent(EventHandleType event_handle, std::coroutine_handle<void> handle) : EventBase(handle), event_handle_(event_handle) {}
+  UserEvent(EventHandleType event_handle, std::coroutine_handle<void> handle)
+      : EventBase(handle), event_handle_(event_handle) {}
   ~UserEvent() = default;
   virtual bool CanResume() { return true; }
   virtual EventHandleType GetEventHandle() const { return event_handle_; }
+
  protected:
   EventHandleType event_handle_{-1};
 };
 
-} // namespace events
-} // namespace arc
+}  // namespace events
+}  // namespace arc
 
 #endif

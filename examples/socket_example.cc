@@ -26,8 +26,8 @@
  * IN THE SOFTWARE.
  */
 
-#include <iostream>
 #include <arc/io/socket.h>
+#include <iostream>
 using namespace arc::io;
 using namespace arc::net;
 

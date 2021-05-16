@@ -88,8 +88,9 @@ int Poller::WaitEvents(events::EventBase** todo_events) {
     }
     if (event_type && ((event_type & EPOLLIN) == 0) &&
         ((event_type & EPOLLOUT) == 0)) {
-      throw arc::exception::IOException("Returned Epoll Events Are Not Supported" +
-                                  std::to_string(event_type));
+      throw arc::exception::IOException(
+          "Returned Epoll Events Are Not Supported" +
+          std::to_string(event_type));
     }
   }
 
@@ -134,7 +135,8 @@ int Poller::WaitEvents(events::EventBase** todo_events) {
         event_read_ = 1;
         int wrote = write(event_fd_, &event_read_, sizeof(event_read_));
         if (wrote != sizeof(event_read_)) {
-          throw arc::exception::IOException("Write user event in epoll wait error");
+          throw arc::exception::IOException(
+              "Write user event in epoll wait error");
         }
         break;
       }
@@ -143,7 +145,8 @@ int Poller::WaitEvents(events::EventBase** todo_events) {
 
   // dispatched
   if (is_dispatched_triggered) {
-    int read_bytes = read(dispatch_fd_, &dispatched_count_, sizeof(dispatched_count_));
+    int read_bytes =
+        read(dispatch_fd_, &dispatched_count_, sizeof(dispatched_count_));
     if (read_bytes < 0) {
       throw arc::exception::IOException("Read dispatched count error");
     }
@@ -160,18 +163,19 @@ void Poller::AddIOEvent(events::IOEvent* event) {
   int should_add_event = (event_type == io::IOType::READ ? EPOLLIN : EPOLLOUT);
 
   std::deque<arc::events::IOEvent*>* to_be_pushed_queue = nullptr;
-  if (target_fd < kMaxFdInArray_) [[likely]] {
-    to_be_pushed_queue = &io_events_[target_fd][static_cast<int>(event_type)];
-  } else [[unlikely]] {
-    if (extra_io_events_.find(target_fd) == extra_io_events_.end()) {
-      extra_io_events_[target_fd] = std::vector<std::deque<events::IOEvent*>>{
-          2, std::deque<events::IOEvent*>{}};
+  if (target_fd < kMaxFdInArray_)
+    [[likely]] {
+      to_be_pushed_queue = &io_events_[target_fd][static_cast<int>(event_type)];
+    } else [[unlikely]] {
+      if (extra_io_events_.find(target_fd) == extra_io_events_.end()) {
+        extra_io_events_[target_fd] = std::vector<std::deque<events::IOEvent*>>{
+            2, std::deque<events::IOEvent*>{}};
+      }
+      to_be_pushed_queue =
+          &extra_io_events_[target_fd][static_cast<int>(event_type)];
     }
-    to_be_pushed_queue =
-        &extra_io_events_[target_fd][static_cast<int>(event_type)];
-  }
 
-  interesting_fds_.insert(target_fd);
+    interesting_fds_.insert(target_fd);
   to_be_pushed_queue->push_back(event);
 }
 
@@ -188,21 +192,21 @@ void Poller::RemoveAllIOEvents(int target_fd) {
 
   std::deque<arc::events::IOEvent*>* read_queue = nullptr;
   std::deque<arc::events::IOEvent*>* write_queue = nullptr;
-  if (target_fd < kMaxFdInArray_) [[likely]] {
-    read_queue = &io_events_[target_fd][static_cast<int>(io::IOType::READ)];
-    write_queue = &io_events_[target_fd][static_cast<int>(io::IOType::WRITE)];
-    io_prev_events_[target_fd] = 0;
-  } else [[unlikely]] {
-    if (extra_io_events_.find(target_fd) == extra_io_events_.end()) {
-      return;
-    }
-    read_queue =
-        &extra_io_events_[target_fd][static_cast<int>(io::IOType::READ)];
-    write_queue =
-        &extra_io_events_[target_fd][static_cast<int>(io::IOType::WRITE)];
-    extra_io_prev_events_.erase(0);
-  }
-  auto itr = read_queue->begin();
+  if (target_fd < kMaxFdInArray_)
+    [[likely]] {
+      read_queue = &io_events_[target_fd][static_cast<int>(io::IOType::READ)];
+      write_queue = &io_events_[target_fd][static_cast<int>(io::IOType::WRITE)];
+      io_prev_events_[target_fd] = 0;
+    } else [[unlikely]] {
+      if (extra_io_events_.find(target_fd) == extra_io_events_.end()) {
+        return;
+      }
+      read_queue =
+          &extra_io_events_[target_fd][static_cast<int>(io::IOType::READ)];
+      write_queue =
+          &extra_io_events_[target_fd][static_cast<int>(io::IOType::WRITE)];
+      extra_io_prev_events_.erase(0);
+    } auto itr = read_queue->begin();
   while (itr != read_queue->end()) {
     need_epoll_ctl = true;
     (*itr)->Resume();
@@ -225,11 +229,12 @@ void Poller::RemoveAllIOEvents(int target_fd) {
 
   if (need_epoll_ctl) {
     int epoll_ret = epoll_ctl(fd_, EPOLL_CTL_DEL, target_fd, nullptr);
-    if (epoll_ret != 0) [[unlikely]] {
-      throw arc::exception::IOException(
-          "Epoll Error When Deleting All IO Events of FD: " +
-          std::to_string(target_fd));
-    }
+    if (epoll_ret != 0)
+      [[unlikely]] {
+        throw arc::exception::IOException(
+            "Epoll Error When Deleting All IO Events of FD: " +
+            std::to_string(target_fd));
+      }
   }
 }
 
@@ -303,7 +308,8 @@ int Poller::Register() {
   e_event.data.fd = dispatch_fd_;
   int epoll_ret = epoll_ctl(fd_, EPOLL_CTL_ADD, dispatch_fd_, &e_event);
   if (epoll_ret != 0) {
-    throw arc::exception::IOException("Epoll error when adding dispatch evetfd");
+    throw arc::exception::IOException(
+        "Epoll error when adding dispatch evetfd");
   }
   return dispatch_fd_;
 }

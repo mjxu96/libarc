@@ -26,10 +26,10 @@
  * IN THE SOFTWARE.
  */
 
-#include <iostream>
 #include <arc/coro/task.h>
 #include <arc/io/socket.h>
 #include <arc/io/tls_socket.h>
+#include <iostream>
 #include <thread>
 
 using namespace arc::io;
@@ -64,7 +64,8 @@ Task<void> HandleClient(
     Socket<Domain::IPV4, Protocol::TCP, Pattern::ASYNC> sock) {
   std::shared_ptr<char[]> data(new char[1024]);
   auto local_addr = sock.GetPeerAddress();
-  std::cout << "client ip: " << local_addr.GetHost() << " port: " << local_addr.GetPort() << std::endl;
+  std::cout << "client ip: " << local_addr.GetHost()
+            << " port: " << local_addr.GetPort() << std::endl;
   try {
     std::string received;
     bool connection_alive = true;
@@ -93,7 +94,8 @@ Task<void> HandleClient(
 Task<void> HandleClient(TLSSocket<Domain::IPV4, Pattern::ASYNC> sock) {
   std::shared_ptr<char[]> data(new char[1024]);
   auto local_addr = sock.GetPeerAddress();
-  // std::cout << "client ip: " << local_addr.GetHost() << " port: " << local_addr.GetPort() << std::endl;
+  // std::cout << "client ip: " << local_addr.GetHost() << " port: " <<
+  // local_addr.GetPort() << std::endl;
   try {
     std::string received;
     bool connection_alive = true;
@@ -126,7 +128,8 @@ Task<void> Listen() {
   accpetor.Bind({"localhost", 8086});
   accpetor.Listen();
   auto local_addr = accpetor.GetLocalAddress();
-  std::cout << "acceptor ip: " << local_addr.GetHost() << " port: " << local_addr.GetPort() << std::endl;
+  std::cout << "acceptor ip: " << local_addr.GetHost()
+            << " port: " << local_addr.GetPort() << std::endl;
   std::cout << "http listen starts" << std::endl;
   int i = 0;
   while (i < 405) {
@@ -196,7 +199,8 @@ Task<void> TLSAccept() {
   accpetor.Bind({"0.0.0.0", 8086});
   accpetor.Listen();
   auto local_addr = accpetor.GetLocalAddress();
-  std::cout << "acceptor ip: " << local_addr.GetHost() << " port: " << local_addr.GetPort() << std::endl;
+  std::cout << "acceptor ip: " << local_addr.GetHost()
+            << " port: " << local_addr.GetPort() << std::endl;
   std::cout << "https listen starts" << std::endl;
   int i = 0;
   while (i < 2) {

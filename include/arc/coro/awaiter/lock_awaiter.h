@@ -36,7 +36,7 @@ namespace coro {
 
 class [[nodiscard]] LockAwaiter {
  public:
-  LockAwaiter(arc::events::detail::LockCore* core)
+  LockAwaiter(arc::events::detail::LockCore * core)
       : core_(core), event_handle_(GetLocalEventLoop().GetEventHandle()) {}
   bool await_ready() { return core_->CanLock(event_handle_, true); }
 

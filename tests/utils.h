@@ -28,18 +28,18 @@
 #ifndef LIBARC__TESTS__UTILS_H
 #define LIBARC__TESTS__UTILS_H
 
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
-#include <string>
 #include <functional>
-#include <chrono>
+#include <string>
 
 namespace arc {
 namespace test {
 
 bool IsRunningWithValgrind() {
 #ifdef __linux__
-  char *p = std::getenv("LD_PRELOAD");
+  char* p = std::getenv("LD_PRELOAD");
   if (p == nullptr) {
     return false;
   }

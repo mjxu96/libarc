@@ -30,8 +30,8 @@
 #define LIBARC__CORO__DISPATCHER_H
 
 #include <arc/exception/io.h>
-#include <unistd.h>
 #include <arc/utils/data_structures/concurrentqueue.h>
+#include <unistd.h>
 
 #ifdef __clang__
 #include <experimental/coroutine>
@@ -44,11 +44,11 @@ using experimental::suspend_never;
 #else
 #include <coroutine>
 #endif
+#include <atomic>
+#include <condition_variable>
 #include <mutex>
 #include <unordered_map>
 #include <vector>
-#include <condition_variable>
-#include <atomic>
 
 namespace arc {
 namespace coro {
@@ -59,9 +59,10 @@ using CoroutineDispatcherRegisterIDType = int;
 
 class CoroutineDispatcherConsumerToken {
  public:
-  CoroutineDispatcherConsumerToken(moodycamel::ConcurrentQueue<std::coroutine_handle<void>>& queue,
-        CoroutineDispatcherRegisterIDType consumer_id)
-   : token(queue), id(consumer_id) {}
+  CoroutineDispatcherConsumerToken(
+      moodycamel::ConcurrentQueue<std::coroutine_handle<void>>& queue,
+      CoroutineDispatcherRegisterIDType consumer_id)
+      : token(queue), id(consumer_id) {}
   CoroutineDispatcherRegisterIDType id{-1};
   moodycamel::ConsumerToken token;
 };
@@ -70,10 +71,12 @@ class CoroutineDispatcherConsumerToken {
 class CoroutineDispatcherQueue {
  public:
   CoroutineDispatcherQueue(int capacity, int max_explicit_producer_count,
-                           int max_implicit_producer_count, CoroutineDispatcherRegisterIDType id)
+                           int max_implicit_producer_count,
+                           CoroutineDispatcherRegisterIDType id)
       : queue_(capacity, max_explicit_producer_count,
-               max_implicit_producer_count), token_(queue_, id) {}
-  
+               max_implicit_producer_count),
+        token_(queue_, id) {}
+
   inline bool Enqueue(std::coroutine_handle<void>&& item) {
     return queue_.try_enqueue(item);
     // if (ret) {
@@ -82,7 +85,7 @@ class CoroutineDispatcherQueue {
     // return ret;
   }
 
-  template<typename It>
+  template <typename It>
   inline bool EnqueueBulk(It it, int count) {
     return queue_.try_enqueue_bulk(it, count);
     // if (ret) {
@@ -99,7 +102,7 @@ class CoroutineDispatcherQueue {
     // return ret;
   }
 
-  template<typename It>
+  template <typename It>
   inline std::size_t DequeBulk(It it, int count) {
     return queue_.try_dequeue_bulk(token_.token, it, count);
     // remained_items_.fetch_add(-ret, std::memory_order::release);
@@ -110,12 +113,12 @@ class CoroutineDispatcherQueue {
   // }
 
   friend class CoroutineDispatcherConsumerToken;
+
  private:
   moodycamel::ConcurrentQueue<std::coroutine_handle<void>> queue_;
   CoroutineDispatcherConsumerToken token_;
   // std::atomic<int> remained_items_{0};
 };
-
 
 class CoroutineDispatcher {
  public:
@@ -153,7 +156,7 @@ class CoroutineDispatcher {
     return ret;
   }
 
-  template<typename It>
+  template <typename It>
   bool EnqueueAllToAny(It it, int count) {
     CoroutineDispatcherRegisterIDType next_consumer_id = GetNextConsumer();
     auto queue_ptr = GetCoroutineQueue(next_consumer_id);
@@ -164,8 +167,9 @@ class CoroutineDispatcher {
     return ret;
   }
 
-  template<typename It>
-  bool EnqueueAllToSpecific(CoroutineDispatcherRegisterIDType consumer_id, It it, int count) {
+  template <typename It>
+  bool EnqueueAllToSpecific(CoroutineDispatcherRegisterIDType consumer_id,
+                            It it, int count) {
     auto queue_ptr = GetCoroutineQueue(consumer_id);
     bool ret = queue_ptr->EnqueueBulk(it, count);
     if (ret) {
@@ -174,18 +178,20 @@ class CoroutineDispatcher {
     return ret;
   }
 
-  std::vector<std::coroutine_handle<void>> DequeueAll(CoroutineDispatcherRegisterIDType consumer_id, int remained_size) {
+  std::vector<std::coroutine_handle<void>> DequeueAll(
+      CoroutineDispatcherRegisterIDType consumer_id, int remained_size) {
     std::vector<std::coroutine_handle<void>> ret;
     ret.reserve(remained_size);
     auto queue_ptr = GetCoroutineQueue(consumer_id);
 
-    std::unique_ptr<std::coroutine_handle<void>[]> data(new std::coroutine_handle<void>[remained_size]);
+    std::unique_ptr<std::coroutine_handle<void>[]> data(
+        new std::coroutine_handle<void>[remained_size]);
     auto data_ptr = data.get();
     while (remained_size > 0) {
       auto this_size = queue_ptr->DequeBulk(data_ptr, remained_size);
       for (int i = 0; i < this_size; i++) {
         ret.push_back(*data_ptr);
-        data_ptr ++;
+        data_ptr++;
       }
       remained_size -= this_size;
     }
@@ -198,9 +204,11 @@ class CoroutineDispatcher {
     consumer_id_itr_ = consumer_ids_.begin();
     for (CoroutineDispatcherRegisterIDType id : consumer_ids_) {
       if (id < kMaxInVecQueueCount_) {
-        queues_[id] = new CoroutineDispatcherQueue(kMaxInVecQueueCount_, 0, consumer_ids_.size(), id);
+        queues_[id] = new CoroutineDispatcherQueue(kMaxInVecQueueCount_, 0,
+                                                   consumer_ids_.size(), id);
       } else {
-        extra_queues_[id] = new CoroutineDispatcherQueue(kMaxInVecQueueCount_, 0, consumer_ids_.size(), id);
+        extra_queues_[id] = new CoroutineDispatcherQueue(
+            kMaxInVecQueueCount_, 0, consumer_ids_.size(), id);
       }
     }
     wait_cond_.notify_all();
@@ -211,15 +219,16 @@ class CoroutineDispatcher {
     wait_cond_.wait(ulock);
   }
 
-  void RegisterConsumer(
-      CoroutineDispatcherRegisterIDType consumer_id) {
+  void RegisterConsumer(CoroutineDispatcherRegisterIDType consumer_id) {
     std::lock_guard guard(global_addition_lock_);
     if (is_registration_done_) {
       throw arc::exception::detail::ExceptionBase(
           "Consumer registration is done. You cannot register any more "
           "consumers");
     }
-    bool existed = consumer_id < kMaxInVecQueueCount_ ? queues_[consumer_id] != nullptr : extra_queues_.find(consumer_id) != extra_queues_.end();
+    bool existed = consumer_id < kMaxInVecQueueCount_
+                       ? queues_[consumer_id] != nullptr
+                       : extra_queues_.find(consumer_id) != extra_queues_.end();
     if (existed) {
       throw arc::exception::detail::ExceptionBase(
           "Consumer id " + std::to_string(consumer_id) +
@@ -229,7 +238,8 @@ class CoroutineDispatcher {
   }
 
  private:
-  void NotifyEventLoop(CoroutineDispatcherRegisterIDType id, std::uint64_t count) {
+  void NotifyEventLoop(CoroutineDispatcherRegisterIDType id,
+                       std::uint64_t count) {
     int wrote = write(id, &count, sizeof(count));
     if (wrote < 0) {
       throw arc::exception::IOException("Notify EventLoop Error");
@@ -245,12 +255,13 @@ class CoroutineDispatcher {
     return next_consumer_id;
   }
 
-  CoroutineDispatcherQueue* GetCoroutineQueue(CoroutineDispatcherRegisterIDType id) {
-    if (id < kMaxInVecQueueCount_) [[likely]] {
-      assert(queues_[id] != nullptr);
-      return queues_[id];
-    }
-    assert(extra_queues_[id] != nullptr);
+  CoroutineDispatcherQueue* GetCoroutineQueue(
+      CoroutineDispatcherRegisterIDType id) {
+    if (id < kMaxInVecQueueCount_)
+      [[likely]] {
+        assert(queues_[id] != nullptr);
+        return queues_[id];
+      } assert(extra_queues_[id] != nullptr);
     return extra_queues_[id];
   }
 
@@ -260,7 +271,9 @@ class CoroutineDispatcher {
   constexpr static int kCoroutineQueueDefaultSize_ = 1024;
   constexpr static int kMaxInVecQueueCount_ = 512;
   std::vector<CoroutineDispatcherQueue*> queues_;
-  std::unordered_map<CoroutineDispatcherRegisterIDType, CoroutineDispatcherQueue*> extra_queues_;
+  std::unordered_map<CoroutineDispatcherRegisterIDType,
+                     CoroutineDispatcherQueue*>
+      extra_queues_;
 
   std::vector<CoroutineDispatcherRegisterIDType> consumer_ids_;
   std::vector<CoroutineDispatcherRegisterIDType>::iterator consumer_id_itr_;

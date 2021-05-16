@@ -152,8 +152,8 @@ TEST_F(LockCoroTest, BasicLockMultiThreadTest) {
 TEST_F(LockCoroTest, BasicCondMultiThreadTest) {
   int thread_num = 20;
   int run_times = 20;
-  arc::coro::StartEventLoop(RunMultipleCondCorosInMultithreads(thread_num,
-  run_times));
+  arc::coro::StartEventLoop(
+      RunMultipleCondCorosInMultithreads(thread_num, run_times));
 }
 
 }  // namespace test

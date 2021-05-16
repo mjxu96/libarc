@@ -33,7 +33,7 @@
 using namespace arc::coro;
 
 inline EventLoopType operator|(EventLoopType a, EventLoopType b) {
-    return static_cast<EventLoopType>(static_cast<int>(a) | static_cast<int>(b));
+  return static_cast<EventLoopType>(static_cast<int>(a) | static_cast<int>(b));
 }
 
 EventLoop::EventLoop() : poller_(&detail::GetLocalPoller()) {}
@@ -77,7 +77,8 @@ void EventLoop::Dispatch(arc::coro::Task<void>&& task) {
 
 void EventLoop::ResigerConsumer() {
   if (is_running_) {
-    throw arc::exception::detail::ExceptionBase("Cannot register consumer after starting running");
+    throw arc::exception::detail::ExceptionBase(
+        "Cannot register consumer after starting running");
   }
   event_loop_type_ = EventLoopType::CONSUMER | event_loop_type_;
   global_dispatcher_ = &GetGlobalCoroutineDispatcher();
@@ -88,14 +89,14 @@ void EventLoop::ResigerConsumer() {
 
 void EventLoop::ResigerProducer() {
   if (is_running_) {
-    throw arc::exception::detail::ExceptionBase("Cannot register producer after starting running");
+    throw arc::exception::detail::ExceptionBase(
+        "Cannot register producer after starting running");
   }
   event_loop_type_ = EventLoopType::PRODUCER | event_loop_type_;
   global_dispatcher_ = &GetGlobalCoroutineDispatcher();
 }
 
 void EventLoop::Trim() {
-
   if ((EventLoopType::CONSUMER | event_loop_type_) == EventLoopType::CONSUMER) {
     ConsumeCoroutine();
   }
@@ -115,7 +116,8 @@ void EventLoop::ConsumeCoroutine() {
   if (triggered_count == 0) {
     return;
   }
-  auto coroutines = global_dispatcher_->DequeueAll(register_id_, triggered_count);
+  auto coroutines =
+      global_dispatcher_->DequeueAll(register_id_, triggered_count);
   for (auto& coro : coroutines) {
     coro.resume();
   }
@@ -126,7 +128,7 @@ void EventLoop::ProduceCoroutine() {
     return;
   }
   if (!global_dispatcher_->EnqueueAllToAny(to_dispatched_coroutines_.begin(),
-                                       to_dispatched_coroutines_.size())) {
+                                           to_dispatched_coroutines_.size())) {
     auto itr = to_dispatched_coroutines_.begin();
     // TODO this might cause infinite loop, find a better way to yield
     while (itr != to_dispatched_coroutines_.end()) {

@@ -50,7 +50,7 @@ class ExceptionBase : public std::exception {
 #else
   ExceptionBase(const std::string& msg,
                 const std::experimental::source_location& source_location =
-                     std::experimental::source_location::current());
+                    std::experimental::source_location::current());
 #endif
   virtual ~ExceptionBase() = default;
   virtual const char* what() const noexcept;
