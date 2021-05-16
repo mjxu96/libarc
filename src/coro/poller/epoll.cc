@@ -50,6 +50,9 @@ Poller::~Poller() {
   if (event_fd_ >= 0) {
     close(event_fd_);
   }
+  if (dispatch_fd_ >= 0) {
+    close(dispatch_fd_);
+  }
 }
 
 int Poller::WaitEvents(events::EventBase** todo_events) {
@@ -58,12 +61,19 @@ int Poller::WaitEvents(events::EventBase** todo_events) {
   int todo_cnt = 0;
 
   bool is_user_event_triggered = false;
+  bool is_dispatched_triggered = false;
+  dispatched_count_ = 0;
 
   // io events
   for (int i = 0; i < event_cnt; i++) {
     int fd = events_[i].data.fd;
     if (fd == event_fd_) {
       is_user_event_triggered = true;
+      assert(events_[i].events & EPOLLIN);
+      continue;
+    }
+    if (fd == dispatch_fd_) {
+      is_dispatched_triggered = true;
       assert(events_[i].events & EPOLLIN);
       continue;
     }
@@ -128,6 +138,14 @@ int Poller::WaitEvents(events::EventBase** todo_events) {
         }
         break;
       }
+    }
+  }
+
+  // dispatched
+  if (is_dispatched_triggered) {
+    int read_bytes = read(dispatch_fd_, &dispatched_count_, sizeof(dispatched_count_));
+    if (read_bytes < 0) {
+      throw arc::exception::IOException("Read dispatched count error");
     }
   }
 
@@ -246,7 +264,7 @@ void Poller::TrimIOEvents() {
 }
 
 void Poller::TrimUserEvents() {
-  bool should_add_epoll = (is_user_event_permanent_ || !user_events_.empty());
+  bool should_add_epoll = !user_events_.empty();
   if (is_event_fd_added_ == should_add_epoll) {
     return;
   }
@@ -273,6 +291,21 @@ void Poller::TrimTimeEvents() {
           .count();
   next_wait_timeout_ =
       std::max((std::int64_t)0, top_event->GetWakeupTime() - current_time);
+}
+
+int Poller::Register() {
+  dispatch_fd_ = eventfd(0, EFD_NONBLOCK);
+  if (dispatch_fd_ < 0) {
+    throw arc::exception::IOException("Create dispatch eventfd error");
+  }
+  epoll_event e_event{};
+  e_event.events = EPOLLIN;
+  e_event.data.fd = dispatch_fd_;
+  int epoll_ret = epoll_ctl(fd_, EPOLL_CTL_ADD, dispatch_fd_, &e_event);
+  if (epoll_ret != 0) {
+    throw arc::exception::IOException("Epoll error when adding dispatch evetfd");
+  }
+  return dispatch_fd_;
 }
 
 events::IOEvent* Poller::PopIOEvent(int fd, io::IOType event_type) {

@@ -66,11 +66,15 @@ class Poller : public io::detail::IOBase {
   void TrimUserEvents();
 
   inline bool IsPollerClean() const {
-    return (total_io_events_ + time_events_.size() + user_events_.size() == 0) || is_user_event_permanent_;
+    return (total_io_events_ + time_events_.size() + user_events_.size() == 0) && (dispatch_fd_ == -1);
   }
 
   inline int GetEventHandle() const { return event_fd_; }
-  inline void SetPermanentUserEvent(bool is_permanent = true) { is_user_event_permanent_ = is_permanent; }
+
+  int Register();
+  int GetDispatchedCount() const {
+    return dispatched_count_;
+  }
 
   const static int kMaxEventsSizePerWait = 1024;
 
@@ -98,9 +102,12 @@ class Poller : public io::detail::IOBase {
   // user events
   int event_fd_{-1};
   std::uint64_t event_read_{0};
-  bool is_user_event_permanent_{false};
   bool is_event_fd_added_{false};
   std::list<events::UserEvent*> user_events_;
+
+  // coro dispatchered related
+  int dispatch_fd_{-1};
+  std::uint64_t dispatched_count_{0};
 
   // epoll related
   epoll_event events_[kMaxEventsSizePerWait];

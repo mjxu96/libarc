@@ -53,15 +53,18 @@ Task<void> LongTimeJob() {
 }
 
 void StartLongTimeJob() {
-  GetLocalEventLoop().AsConsumer();
-  StartEventLoop(LongTimeJob());
+  GetLocalEventLoop().ResigerConsumer();
+  std::cout << "registered self as consumer" << std::endl;
+  // StartEventLoop(LongTimeJob());
+  RunUntilComplelete();
+  std::cout << "coro done" << std::endl;
 }
 
 Task<void> HandleClient(
     Socket<Domain::IPV4, Protocol::TCP, Pattern::ASYNC> sock) {
   std::shared_ptr<char[]> data(new char[1024]);
   auto local_addr = sock.GetPeerAddress();
-  // std::cout << "client ip: " << local_addr.GetHost() << " port: " << local_addr.GetPort() << std::endl;
+  std::cout << "client ip: " << local_addr.GetHost() << " port: " << local_addr.GetPort() << std::endl;
   try {
     std::string received;
     bool connection_alive = true;
@@ -215,14 +218,16 @@ Task<void> DispatchAccept(int thread_num) {
   accpetor.Listen();
   std::cout << "http listen starts at " << port << std::endl;
   int i = 0;
-  arc::coro::GetLocalEventLoop().AsProducer();
+  arc::coro::GetLocalEventLoop().ResigerProducer();
   std::vector<std::thread> threads;
   for (int i = 0; i < thread_num; i++) {
     threads.emplace_back(StartLongTimeJob);
   }
-  while (i < 2) {
+  co_await SleepFor(std::chrono::seconds(1));
+  arc::coro::GetGlobalCoroutineDispatcher().SetRegistrationDone();
+  while (i < 1000) {
     auto in_sock = co_await accpetor.Accept();
-    // std::cout << "accepted one client" << std::endl;
+    std::cout << "accepted client " << i << std::endl;
     arc::coro::GetLocalEventLoop().Dispatch(HandleClient(std::move(in_sock)));
     i++;
   }
@@ -244,7 +249,7 @@ void Start() { StartEventLoop(Listen()); }
 int main(int argc, char** argv) {
   // StartEventLoop(Connect());
   // std::vector<std::thread> threads;
-  // int thread_num = std::stoi(std::string(argv[1]));
+  int thread_num = std::stoi(std::string(argv[1]));
   // for (int i = 0; i < thread_num; i++) {
   //   threads.emplace_back(TLSStart);
   // }
@@ -252,11 +257,11 @@ int main(int argc, char** argv) {
   // for (int i = 0; i < thread_num; i++) {
   //   threads[i].join();
   // }
-  // DispatchHttpStart(thread_num);
+  DispatchHttpStart(thread_num);
 
-  std::cout << "finished" << std::endl;
-  StartEventLoop(Connect());
-  StartEventLoop(TLSConnect());
-  StartEventLoop(Listen());
+  // std::cout << "finished" << std::endl;
+  // StartEventLoop(Connect());
+  // StartEventLoop(TLSConnect());
+  // StartEventLoop(Listen());
   // StartEventLoop(TLSAccept());
 }

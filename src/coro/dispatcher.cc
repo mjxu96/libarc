@@ -27,25 +27,11 @@
  */
 
 #include <arc/coro/dispatcher.h>
-#ifdef __clang__
-#include <experimental/coroutine>
-namespace std {
-using experimental::coroutine_handle;
-}
-#else
-#include <coroutine>
-#endif
 
-#define DISPATCHER_MAX_ELEMENT_NUM 1024
-
-using namespace arc::coro;
-
-// CoroutineDispatcherConsumerToken::CoroutineDispatcherConsumerToken(
-//     CoroutineDispatcher& dispatcher,
-//     CoroutineDispatcherConsumerIDType consumer_id)
-//     : token_(dispatcher.queue_), consumer_id_(consumer_id) {}
+std::mutex global_dispatcher_lock;
 
 arc::coro::CoroutineDispatcher& arc::coro::GetGlobalCoroutineDispatcher() {
+  std::lock_guard guard(global_dispatcher_lock);
   static arc::coro::CoroutineDispatcher dispatcher;
   return dispatcher;
 }

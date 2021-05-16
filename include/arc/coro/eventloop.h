@@ -51,14 +51,15 @@ using experimental::coroutine_handle;
 #include <coroutine>
 #endif
 #include <vector>
+#include <list>
 
 namespace arc {
 namespace coro {
 
 enum class EventLoopType {
-  PRODUCER = 0U,
-  CONSUMER,
-  NONE,
+  NONE = 0U,
+  PRODUCER = 1U,
+  CONSUMER = 2U,
 };
 
 template <arc::concepts::CopyableMoveableOrVoid T>
@@ -92,11 +93,15 @@ class EventLoop {
   void CleanUpFinishedCoroutines();
 
   void Dispatch(Task<void>&& task);
-  void AsProducer();
-  void AsConsumer();
+  void ResigerConsumer();
+  void ResigerProducer();
 
  private:
+  void Trim();
+  
   detail::Poller* poller_{nullptr};
+
+  bool is_running_{false};
 
   const static int kMaxEventsSizePerWait_ = detail::Poller::kMaxEventsSizePerWait;
   const static int kMaxConsumableCoroutineNum_ = 4;
@@ -105,9 +110,12 @@ class EventLoop {
   events::EventBase* todo_events_[2 * kMaxEventsSizePerWait_] = {nullptr};
 
   std::vector<std::coroutine_handle<>> to_clean_up_handles_{};
-  std::vector<std::coroutine_handle<>> to_dispatched_coroutines_{};
-  EventDispatcher<std::coroutine_handle<void>>* global_dispatcher_{nullptr};
-  EventLoopType type_{EventLoopType::NONE};
+
+  // dispatched events
+  std::list<std::coroutine_handle<>> to_dispatched_coroutines_{};
+  CoroutineDispatcherRegisterIDType register_id_{-1};
+  EventLoopType event_loop_type_{EventLoopType::NONE};
+  CoroutineDispatcher* global_dispatcher_{nullptr};
   void ConsumeCoroutine();
   void ProduceCoroutine();
 };

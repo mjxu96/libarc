@@ -32,39 +32,22 @@
 
 using namespace arc::coro;
 
+inline EventLoopType operator|(EventLoopType a, EventLoopType b) {
+    return static_cast<EventLoopType>(static_cast<int>(a) | static_cast<int>(b));
+}
+
 EventLoop::EventLoop() : poller_(&detail::GetLocalPoller()) {}
 
 bool EventLoop::IsDone() {
-  return (poller_->IsPollerClean()) &&
-         (to_dispatched_coroutines_.empty() ||
-          type_ != EventLoopType::PRODUCER);
+  return poller_->IsPollerClean() && register_id_ == -1;
 }
 
 void EventLoop::InitDo() {
-  poller_->TrimIOEvents();
-  poller_->TrimTimeEvents();
-  poller_->TrimUserEvents();
+  is_running_ = true;
+  Trim();
 }
 
 void EventLoop::Do() {
-  if (type_ == EventLoopType::CONSUMER)
-    [[likely]] {
-      ConsumeCoroutine();
-    } else if (type_ == EventLoopType::PRODUCER)[[unlikely]] {
-      ProduceCoroutine();
-    }
-
-  CleanUpFinishedCoroutines();
-
-  if ((poller_->IsPollerClean())) {
-    assert(to_clean_up_handles_.empty());
-    while (!to_dispatched_coroutines_.empty() &&
-           type_ != EventLoopType::PRODUCER) {
-      ProduceCoroutine();
-    }
-    return;
-  }
-
   // Then we will handle all others
   int todo_cnt = poller_->WaitEvents(todo_events_);
 
@@ -73,9 +56,7 @@ void EventLoop::Do() {
     delete todo_events_[i];
   }
 
-  poller_->TrimIOEvents();
-  poller_->TrimTimeEvents();
-  poller_->TrimUserEvents();
+  Trim();
 }
 
 void EventLoop::AddToCleanUpCoroutine(std::coroutine_handle<> handle) {
@@ -90,30 +71,53 @@ void EventLoop::CleanUpFinishedCoroutines() {
 }
 
 void EventLoop::Dispatch(arc::coro::Task<void>&& task) {
-  assert(type_ == EventLoopType::PRODUCER);
   task.SetNeedClean(true);
   to_dispatched_coroutines_.push_back(task.GetCoroutine());
 }
 
-void EventLoop::AsProducer() {
-  assert(type_ == EventLoopType::NONE);
-  type_ = EventLoopType::PRODUCER;
-  global_dispatcher_ = &GetGlobalEventDispatcher<std::coroutine_handle<void>>();
-  global_dispatcher_->RegisterAsProducerEvent();
+void EventLoop::ResigerConsumer() {
+  if (is_running_) {
+    throw arc::exception::detail::ExceptionBase("Cannot register consumer after starting running");
+  }
+  event_loop_type_ = EventLoopType::CONSUMER | event_loop_type_;
+  global_dispatcher_ = &GetGlobalCoroutineDispatcher();
+  register_id_ = poller_->Register();
+  global_dispatcher_->RegisterConsumer(register_id_);
+  global_dispatcher_->WaitForRegistrationDone();
 }
 
-void EventLoop::AsConsumer() {
-  assert(type_ == EventLoopType::NONE);
-  type_ = EventLoopType::CONSUMER;
-  global_dispatcher_ = &GetGlobalEventDispatcher<std::coroutine_handle<void>>();
+void EventLoop::ResigerProducer() {
+  if (is_running_) {
+    throw arc::exception::detail::ExceptionBase("Cannot register producer after starting running");
+  }
+  event_loop_type_ = EventLoopType::PRODUCER | event_loop_type_;
+  global_dispatcher_ = &GetGlobalCoroutineDispatcher();
+}
+
+void EventLoop::Trim() {
+
+  if ((EventLoopType::CONSUMER | event_loop_type_) == EventLoopType::CONSUMER) {
+    ConsumeCoroutine();
+  }
+  if ((EventLoopType::PRODUCER | event_loop_type_) == EventLoopType::PRODUCER) {
+    ProduceCoroutine();
+  }
+
+  poller_->TrimIOEvents();
+  poller_->TrimTimeEvents();
+  poller_->TrimUserEvents();
+
+  CleanUpFinishedCoroutines();
 }
 
 void EventLoop::ConsumeCoroutine() {
-  std::coroutine_handle<void> coroutines[kMaxConsumableCoroutineNum_] = {0};
-  int size =
-      global_dispatcher_->DequeueBulk(coroutines, kMaxConsumableCoroutineNum_);
-  for (int i = 0; i < size; i++) {
-    coroutines[i].resume();
+  auto triggered_count = poller_->GetDispatchedCount();
+  if (triggered_count == 0) {
+    return;
+  }
+  auto coroutines = global_dispatcher_->DequeueAll(register_id_, triggered_count);
+  for (auto& coro : coroutines) {
+    coro.resume();
   }
 }
 
@@ -121,13 +125,12 @@ void EventLoop::ProduceCoroutine() {
   if (to_dispatched_coroutines_.empty()) {
     return;
   }
-  if (!global_dispatcher_->EnqueueBulk(to_dispatched_coroutines_.begin(),
+  if (!global_dispatcher_->EnqueueAllToAny(to_dispatched_coroutines_.begin(),
                                        to_dispatched_coroutines_.size())) {
     auto itr = to_dispatched_coroutines_.begin();
+    // TODO this might cause infinite loop, find a better way to yield
     while (itr != to_dispatched_coroutines_.end()) {
-      if (!global_dispatcher_->Enqueue(std::move(*itr))) {
-        break;
-      } else {
+      if (global_dispatcher_->EnqueueToAny(std::move(*itr))) {
         itr = to_dispatched_coroutines_.erase(itr);
       }
     }
