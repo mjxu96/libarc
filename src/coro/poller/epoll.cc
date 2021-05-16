@@ -108,8 +108,12 @@ int Poller::WaitEvents(events::EventBase** todo_events) {
       auto user_event = (*itr);
       if (todo_cnt < kMaxEventsSizePerWait) {
         if (user_event->CanResume()) {
-          todo_events[todo_cnt] = user_event;
-          todo_cnt++;
+          // for epoll, we will immediately resume user event when it is
+          // resumable
+          // todo_events[todo_cnt] = user_event;
+          // todo_cnt++;
+          user_event->Resume();
+          delete user_event;
           itr = user_events_.erase(itr);
           continue;
         } else {

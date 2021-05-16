@@ -40,10 +40,12 @@ using experimental::coroutine_handle;
 
 using namespace arc::coro;
 
-template <>
-arc::coro::EventDispatcher<std::coroutine_handle<void>>&
-arc::coro::GetGlobalEventDispatcher() {
-  static arc::coro::EventDispatcher<std::coroutine_handle<void>> dispatcher(
-      DISPATCHER_MAX_ELEMENT_NUM);
+// CoroutineDispatcherConsumerToken::CoroutineDispatcherConsumerToken(
+//     CoroutineDispatcher& dispatcher,
+//     CoroutineDispatcherConsumerIDType consumer_id)
+//     : token_(dispatcher.queue_), consumer_id_(consumer_id) {}
+
+arc::coro::CoroutineDispatcher& arc::coro::GetGlobalCoroutineDispatcher() {
+  static arc::coro::CoroutineDispatcher dispatcher;
   return dispatcher;
 }

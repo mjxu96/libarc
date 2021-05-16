@@ -62,13 +62,13 @@ Task<void> CoroWait() {
 
 Task<void> LockWait() {
   for (int i = 0; i < 10; i++) {
-    std::cout << "before lock" << std::endl;
+    // std::cout << "before lock" << std::endl;
     co_await lock.Acquire();
-    std::cout << "after lock" << std::endl;
+    // std::cout << "after lock" << std::endl;
 
-    std::cout << "before releasing" << std::endl;
+    // std::cout << "before releasing" << std::endl;
     lock.Release();
-    std::cout << "after releasing" << std::endl;
+    // std::cout << "after releasing" << std::endl;
   }
 }
 
@@ -120,14 +120,15 @@ Task<void> StartLock(int thread_num) {
   std::cout << "main lock try acquire" << std::endl;
   co_await lock.Acquire();
   std::cout << "main lock acquired" << std::endl;
-  // for (int i = 0; i < 2; i++) {
-  //   EnsureFuture(LockWait());
-  // }
-
-  std::vector<std::thread> threads;
-  for (int i = 0; i < thread_num; i++) {
-    threads.emplace_back(StartLockWait, 100);
+  for (int i = 0; i < 100; i++) {
+    EnsureFuture(LockWait());
   }
+  // StartLockWait(100);
+
+  // std::vector<std::thread> threads;
+  // for (int i = 0; i < thread_num; i++) {
+  //   threads.emplace_back(StartLockWait, 100);
+  // }
 
   co_await SleepFor(std::chrono::seconds(1));
   std::cout << "main lock try releasing" << std::endl;
@@ -140,9 +141,9 @@ Task<void> StartLock(int thread_num) {
   lock.Release();
   std::cout << "main lock released again" << std::endl;
 
-  for (int i = 0; i < thread_num; i++) {
-    threads[i].join();
-  }
+  // for (int i = 0; i < thread_num; i++) {
+  //   threads[i].join();
+  // }
   std::cout << "main try lock locked again again" << std::endl;
   co_await lock.Acquire();
   std::cout << "main lock locked again again" << std::endl;
@@ -151,7 +152,8 @@ Task<void> StartLock(int thread_num) {
 }
 
 int main() {
-  StartEventLoop(StartCondition(5));
-  // StartEventLoop(StartLock(3));
+  // StartEventLoop(StartCondition(5));
+  // StartLockWait(100);
+  StartEventLoop(StartLock(3));
   return 0;
 }
