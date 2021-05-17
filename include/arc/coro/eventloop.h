@@ -68,7 +68,7 @@ class[[nodiscard]] Task;
 class EventLoop {
  public:
   EventLoop();
-  ~EventLoop() = default;
+  ~EventLoop();
 
   bool IsDone();
   void InitDo();
@@ -93,18 +93,22 @@ class EventLoop {
   void CleanUpFinishedCoroutines();
 
   void Dispatch(Task<void>&& task);
+  void DispatchTo(Task<void>&& task,
+                  CoroutineDispatcherRegisterIDType event_loop_id);
+
   void ResigerConsumer();
+  void DeResigerConsumer();
   void ResigerProducer();
+  void DeResigerProducer();
 
  private:
   void Trim();
 
-  detail::Poller* poller_{nullptr};
+  Poller* poller_{nullptr};
 
   bool is_running_{false};
 
-  const static int kMaxEventsSizePerWait_ =
-      detail::Poller::kMaxEventsSizePerWait;
+  const static int kMaxEventsSizePerWait_ = Poller::kMaxEventsSizePerWait;
   const static int kMaxConsumableCoroutineNum_ = 4;
 
   // poller related
@@ -113,10 +117,15 @@ class EventLoop {
   std::vector<std::coroutine_handle<>> to_clean_up_handles_{};
 
   // dispatched events
-  std::list<std::coroutine_handle<>> to_dispatched_coroutines_{};
+  std::list<std::coroutine_handle<>> to_randomly_dispatched_coroutines_{};
+  std::unordered_map<CoroutineDispatcherRegisterIDType,
+                     std::list<std::coroutine_handle<>>>
+      to_dispatched_coroutines_with_dests_{};
+  int to_dispatched_coroutines_count_{0};
   CoroutineDispatcherRegisterIDType register_id_{-1};
   EventLoopType event_loop_type_{EventLoopType::NONE};
   CoroutineDispatcher* global_dispatcher_{nullptr};
+  CoroutineDispatcherQueue* dispatcher_queue_{nullptr};
   void ConsumeCoroutine();
   void ProduceCoroutine();
 };

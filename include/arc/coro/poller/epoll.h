@@ -46,7 +46,6 @@
 
 namespace arc {
 namespace coro {
-namespace detail {
 
 class Poller : public io::detail::IOBase {
  public:
@@ -65,7 +64,9 @@ class Poller : public io::detail::IOBase {
   void TrimTimeEvents();
   void TrimUserEvents();
 
-  inline bool IsPollerClean() const {
+  inline void SetNextTimeNoWait() { next_wait_timeout_ = 0; }
+
+  inline bool IsPollerDone() const {
     return (total_io_events_ + time_events_.size() + user_events_.size() ==
             0) &&
            (dispatch_fd_ == -1);
@@ -74,7 +75,7 @@ class Poller : public io::detail::IOBase {
   inline int GetEventHandle() const { return event_fd_; }
 
   int Register();
-  int GetDispatchedCount() const { return dispatched_count_; }
+  void DeRegister();
 
   const static int kMaxEventsSizePerWait = 1024;
 
@@ -107,9 +108,8 @@ class Poller : public io::detail::IOBase {
   bool is_event_fd_added_{false};
   std::list<events::UserEvent*> user_events_;
 
-  // coro dispatchered related
+  // coro dispatcher related
   int dispatch_fd_{-1};
-  std::uint64_t dispatched_count_{0};
 
   // epoll related
   epoll_event events_[kMaxEventsSizePerWait];
@@ -118,9 +118,6 @@ class Poller : public io::detail::IOBase {
   events::IOEvent* PopIOEvent(int fd, io::IOType event_type);
 };
 
-Poller& GetLocalPoller();
-
-}  // namespace detail
 }  // namespace coro
 }  // namespace arc
 

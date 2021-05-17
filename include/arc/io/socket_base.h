@@ -65,13 +65,15 @@ class SocketBase : public IOBase {
       fd_ = socket(static_cast<int>(AF), static_cast<int>(ST),
                    static_cast<int>(P));
     } else {
-      protoent* protocol_info = getprotobyname(nameof::nameof_enum<P>().data());
-      if (protocol_info) {
-        fd_ = socket(static_cast<int>(AF), static_cast<int>(ST),
-                     protocol_info->p_proto);
-      } else {
-        fd_ = socket(static_cast<int>(AF), static_cast<int>(ST), 0);
-      }
+      fd_ = socket(static_cast<int>(AF), static_cast<int>(ST), 0);
+      // TODO below maybe useful in the future.
+      // protoent* protocol_info =
+      // getprotobyname(nameof::nameof_enum<P>().data()); if (protocol_info) {
+      //   fd_ = socket(static_cast<int>(AF), static_cast<int>(ST),
+      //                protocol_info->p_proto);
+      // } else {
+      //   fd_ = socket(static_cast<int>(AF), static_cast<int>(ST), 0);
+      // }
     }
     if (fd_ < 0) {
       throw arc::exception::IOException();
@@ -161,9 +163,7 @@ class SocketBase : public IOBase {
       typename std::conditional_t<(AF == arc::net::Domain::IPV4), sockaddr_in,
                                   sockaddr_in6>;
 
-  constexpr static int kRecvBufferSize_ = 1024;
   net::Address<AF> addr_{};
-  char buffer_[kRecvBufferSize_] = {0};
   bool is_non_blocking_{false};
   bool is_bound_{false};
 
@@ -192,33 +192,6 @@ class SocketBase : public IOBase {
       throw arc::exception::IOException();
     }
     return sent;
-  }
-
-  template <net::Protocol UP = P>
-  requires(UP != net::Protocol::UDP) std::string RecvAll(int max_recv_bytes) {
-    std::string buffer;
-    max_recv_bytes = (max_recv_bytes < 0
-                          ? std::numeric_limits<decltype(max_recv_bytes)>::max()
-                          : max_recv_bytes);
-    int left_size = max_recv_bytes;
-    while (left_size > 0) {
-      int this_read_size = std::min(left_size, kRecvBufferSize_);
-      ssize_t tmp_read = recv(this->fd_, buffer_, this_read_size, 0);
-      if (tmp_read > 0) {
-        buffer.append(buffer_, tmp_read);
-      }
-      if (tmp_read == -1) {
-        if (errno != EAGAIN || errno != EWOULDBLOCK) {
-          throw arc::exception::IOException();
-        }
-        break;
-      } else if (tmp_read < kRecvBufferSize_) {
-        // we read all contents;
-        break;
-      }
-      left_size -= tmp_read;
-    }
-    return buffer;
   }
 
   template <net::Protocol UP = P>
@@ -252,8 +225,6 @@ class SocketBase : public IOBase {
 
  private:
   void MoveFrom(SocketBase&& other) {
-    std::memset(buffer_, 0, kRecvBufferSize_);
-    std::memcpy(buffer_, other.buffer_, kRecvBufferSize_);
     addr_ = std::move(other.addr_);
     is_non_blocking_ = other.is_non_blocking_;
   }

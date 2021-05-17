@@ -279,6 +279,8 @@ void StartEventLoop(Task<void>&& task);
 
 TimeAwaiter SleepFor(const std::chrono::system_clock::duration& duration);
 
+TimeAwaiter Yield();
+
 }  // namespace coro
 }  // namespace arc
 

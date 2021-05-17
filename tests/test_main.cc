@@ -27,6 +27,7 @@
  */
 
 #include "test_coro.h"
+#include "test_coro_dispatcher.h"
 #include "test_coro_lock.h"
 #include "test_coro_socket.h"
 

@@ -111,30 +111,6 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::SYNC) std::string RecvAll(int max_recv_bytes = -1) {
-    std::string buffer;
-    max_recv_bytes = (max_recv_bytes < 0
-                          ? std::numeric_limits<decltype(max_recv_bytes)>::max()
-                          : max_recv_bytes);
-    int left_size = max_recv_bytes;
-    while (left_size > 0) {
-      int this_read_size = std::min(left_size, this->kRecvBufferSize_);
-      ssize_t tmp_read = SSL_read(ssl_.ssl, this->buffer_, this_read_size);
-      if (tmp_read > 0) {
-        buffer.append(this->buffer_, tmp_read);
-      }
-      if (tmp_read == -1) {
-        throw arc::exception::TLSException("Read Error");
-      } else if (tmp_read < this->kRecvBufferSize_) {
-        // we read all contents;
-        break;
-      }
-      left_size -= tmp_read;
-    }
-    return buffer;
-  }
-
-  template <Pattern UPP = PP>
   requires(UPP == Pattern::ASYNC) coro::Task<ssize_t> Recv(char* buf,
                                                            int max_recv_bytes) {
     while (true) {
@@ -162,50 +138,6 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
         co_return ret;
       }
     }
-  }
-
-  template <Pattern UPP = PP>
-  requires(UPP == Pattern::ASYNC) coro::Task<std::string> RecvAll(
-      int max_recv_bytes = -1) {
-    if (max_recv_bytes >= 0) {
-      throw std::logic_error(
-          "Async Recv of TLSSocket cannot specify the max_recv_bytes.");
-    }
-    int ret = -1;
-    bool is_data_read = false;
-    std::string ret_str;
-    while (true) {
-      ret = SSL_read(ssl_.ssl, this->buffer_, this->kRecvBufferSize_);
-      if (ret <= 0) {
-        int err = SSL_get_error(ssl_.ssl, ret);
-        if (err == SSL_ERROR_WANT_READ) {
-          if (!is_data_read) {
-            co_await coro::IOAwaiter(
-                std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
-                std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
-                this->fd_, arc::io::IOType::READ);
-          } else {
-            break;
-          }
-        } else if (err == SSL_ERROR_WANT_WRITE) {
-          co_await coro::IOAwaiter(
-              std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
-              std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
-              this->fd_, arc::io::IOType::WRITE);
-        } else if (err == SSL_ERROR_ZERO_RETURN) {
-          // no data, we exit
-          break;
-        } else if (err == SSL_ERROR_SYSCALL && errno == 0) {
-          break;
-        } else {
-          throw exception::TLSException("Read Error");
-        }
-      } else {
-        is_data_read = true;
-        ret_str.append(this->buffer_, ret);
-      }
-    }
-    co_return ret_str;
   }
 
   template <Pattern UPP = PP>

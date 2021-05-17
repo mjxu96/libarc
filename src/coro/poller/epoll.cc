@@ -31,7 +31,7 @@
 #include <sys/eventfd.h>
 
 using namespace arc;
-using namespace arc::coro::detail;
+using namespace arc::coro;
 
 Poller::Poller() {
   fd_ = epoll_create1(0);
@@ -62,7 +62,6 @@ int Poller::WaitEvents(events::EventBase** todo_events) {
 
   bool is_user_event_triggered = false;
   bool is_dispatched_triggered = false;
-  dispatched_count_ = 0;
 
   // io events
   for (int i = 0; i < event_cnt; i++) {
@@ -119,12 +118,13 @@ int Poller::WaitEvents(events::EventBase** todo_events) {
       auto user_event = (*itr);
       if (todo_cnt < kMaxEventsSizePerWait) {
         if (user_event->CanResume()) {
-          // for epoll, we will immediately resume user event when it is
-          // resumable
-          // todo_events[todo_cnt] = user_event;
-          // todo_cnt++;
-          user_event->Resume();
-          delete user_event;
+          todo_events[todo_cnt] = user_event;
+          todo_cnt++;
+          // We do not directly resume this user event is because
+          // it might change the value below like dispatch_fd_, which
+          // will cause a read error
+          // user_event->Resume();
+          // delete user_event;
           itr = user_events_.erase(itr);
           continue;
         } else {
@@ -145,9 +145,8 @@ int Poller::WaitEvents(events::EventBase** todo_events) {
 
   // dispatched
   if (is_dispatched_triggered) {
-    int read_bytes =
-        read(dispatch_fd_, &dispatched_count_, sizeof(dispatched_count_));
-    if (read_bytes < 0) {
+    std::uint64_t count = 0;
+    if (read(dispatch_fd_, &count, sizeof(count)) < 0) {
       throw arc::exception::IOException("Read dispatched count error");
     }
   }
@@ -314,6 +313,19 @@ int Poller::Register() {
   return dispatch_fd_;
 }
 
+void Poller::DeRegister() {
+  if (dispatch_fd_ < 0) {
+    return;
+  }
+  int epoll_ret = epoll_ctl(fd_, EPOLL_CTL_DEL, dispatch_fd_, nullptr);
+  if (epoll_ret != 0) {
+    throw arc::exception::IOException(
+        "Epoll error when removing dispatch evetfd");
+  }
+  close(dispatch_fd_);
+  dispatch_fd_ = -1;
+}
+
 events::IOEvent* Poller::PopIOEvent(int fd, io::IOType event_type) {
   arc::events::IOEvent* event = nullptr;
   if (fd < kMaxFdInArray_) {
@@ -348,9 +360,4 @@ int Poller::GetExistingIOEvent(int fd) {
     }
   }
   return cur;
-}
-
-Poller& arc::coro::detail::GetLocalPoller() {
-  thread_local Poller poller;
-  return poller;
 }

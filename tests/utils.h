@@ -67,6 +67,11 @@ int GetElapsedTimeMilliseconds(const std::function<void()>& function) {
   return elapsed;
 }
 
+int& GetThreadLocalCounter() {
+  thread_local int counter;
+  return counter;
+}
+
 }  // namespace test
 }  // namespace arc
 

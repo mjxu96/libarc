@@ -50,3 +50,5 @@ TimeAwaiter arc::coro::SleepFor(
     const std::chrono::system_clock::duration& duration) {
   return TimeAwaiter(duration);
 }
+
+TimeAwaiter arc::coro::Yield() { return TimeAwaiter(std::chrono::seconds(0)); }

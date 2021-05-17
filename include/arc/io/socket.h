@@ -113,12 +113,6 @@ class Socket : public detail::SocketBase<AF,
   }
 
   template <net::Protocol UP = P, Pattern UPP = PP>
-      requires(UP == net::Protocol::TCP) && (UPP == Pattern::SYNC) std::string
-      RecvAll(int max_recv_bytes = -1) {
-    return ParentType::RecvAll<UP>(max_recv_bytes);
-  }
-
-  template <net::Protocol UP = P, Pattern UPP = PP>
       requires(UP == net::Protocol::TCP) && (UPP == Pattern::SYNC) ssize_t
       Recv(char* buf, int max_recv_bytes = -1) {
     return ParentType::template Recv<UP>(buf, max_recv_bytes);
@@ -223,24 +217,6 @@ class Acceptor : virtual public Socket<AF, net::Protocol::TCP, PP> {
 
   template <Pattern UPP = PP>
   requires(UPP == Pattern::SYNC) Socket<AF, net::Protocol::TCP, PP> Accept() {
-    return InternalAccept();
-  }
-
-  template <Pattern UPP = PP>
-  requires(UPP == Pattern::ASYNC) auto Accept() {
-    return coro::IOAwaiter(
-        std::bind(&Acceptor<AF, UPP>::template IOReadyFunctor<UPP>, this),
-        std::bind(&Acceptor<AF, UPP>::InternalAccept, this), this->fd_,
-        io::IOType::READ);
-  }
-
- protected:
-  template <Pattern UPP = PP>
-  requires(UPP == Pattern::ASYNC) bool IOReadyFunctor() {
-    return false;
-  }
-
-  Socket<AF, net::Protocol::TCP, PP> InternalAccept() {
     typename detail::SocketBase<AF, net::SocketType::STREAM,
                                 net::Protocol::TCP>::CAddressType in_addr;
     socklen_t addrlen = sizeof(in_addr);
@@ -252,6 +228,52 @@ class Acceptor : virtual public Socket<AF, net::Protocol::TCP, PP> {
     return Socket<AF, net::Protocol::TCP, PP>(accept_fd, in_addr);
   }
 
+  template <Pattern UPP = PP>
+  requires(UPP == Pattern::ASYNC) auto Accept() {
+    return coro::IOAwaiter(
+        std::bind(&Acceptor<AF, UPP>::template IOReadyFunctor<UPP>, this),
+        std::bind(&Acceptor<AF, UPP>::template GetNextAvailableSocket<UPP>,
+                  this),
+        this->fd_, io::IOType::READ);
+  }
+
+ protected:
+  template <Pattern UPP = PP>
+  requires(UPP == Pattern::ASYNC) bool IOReadyFunctor() {
+    return !accepted_sockets_.empty();
+  }
+
+  template <Pattern UPP = PP>
+  requires(UPP == Pattern::ASYNC)
+      Socket<AF, net::Protocol::TCP, UPP> GetNextAvailableSocket() {
+    if (!accepted_sockets_.empty()) {
+      Socket<AF, net::Protocol::TCP, UPP> next_socket =
+          std::move(accepted_sockets_.front());
+      accepted_sockets_.pop();
+      return std::move(next_socket);
+    }
+    typename detail::SocketBase<AF, net::SocketType::STREAM,
+                                net::Protocol::TCP>::CAddressType in_addr;
+    socklen_t addrlen = sizeof(in_addr);
+    int accept_fd = 0;
+    while (accept_fd == 0) {
+      int accept_fd =
+          accept(this->fd_, (struct sockaddr*)&in_addr, (socklen_t*)&addrlen);
+      if (accept_fd < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+        throw arc::exception::IOException("Accept Error");
+      }
+      if (accept_fd < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        break;
+      }
+      accepted_sockets_.emplace(accept_fd, in_addr);
+    }
+    Socket<AF, net::Protocol::TCP, UPP> next_socket =
+        std::move(accepted_sockets_.front());
+    accepted_sockets_.pop();
+    return std::move(next_socket);
+  }
+
+  std::queue<Socket<AF, net::Protocol::TCP, PP>> accepted_sockets_;
   bool is_listened_{false};
 };
 

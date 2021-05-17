@@ -30,16 +30,36 @@
 #include <arc/coro/task.h>
 #include <arc/exception/io.h>
 
+#include <iostream>
+
 using namespace arc::coro;
 
 inline EventLoopType operator|(EventLoopType a, EventLoopType b) {
   return static_cast<EventLoopType>(static_cast<int>(a) | static_cast<int>(b));
 }
 
-EventLoop::EventLoop() : poller_(&detail::GetLocalPoller()) {}
+inline EventLoopType operator&(EventLoopType a, EventLoopType b) {
+  return static_cast<EventLoopType>(static_cast<int>(a) & static_cast<int>(b));
+}
+
+inline EventLoopType operator~(EventLoopType a) {
+  return static_cast<EventLoopType>(~static_cast<int>(a));
+}
+
+EventLoop::EventLoop() { poller_ = new Poller(); }
+
+EventLoop::~EventLoop() {
+  DeResigerProducer();
+  DeResigerConsumer();
+  delete poller_;
+}
 
 bool EventLoop::IsDone() {
-  return poller_->IsPollerClean() && register_id_ == -1;
+  return poller_->IsPollerDone() &&
+         ((event_loop_type_ == EventLoopType::NONE) ||
+          (((event_loop_type_ & EventLoopType::PRODUCER) ==
+            EventLoopType::PRODUCER) &&
+           to_dispatched_coroutines_count_ == 0));
 }
 
 void EventLoop::InitDo() {
@@ -72,35 +92,58 @@ void EventLoop::CleanUpFinishedCoroutines() {
 
 void EventLoop::Dispatch(arc::coro::Task<void>&& task) {
   task.SetNeedClean(true);
-  to_dispatched_coroutines_.push_back(task.GetCoroutine());
+  to_randomly_dispatched_coroutines_.push_back(task.GetCoroutine());
+  to_dispatched_coroutines_count_++;
+}
+
+void EventLoop::DispatchTo(arc::coro::Task<void>&& task,
+                           CoroutineDispatcherRegisterIDType consumer_id) {
+  task.SetNeedClean(true);
+  if (to_dispatched_coroutines_with_dests_.find(consumer_id) ==
+      to_dispatched_coroutines_with_dests_.end()) {
+    to_dispatched_coroutines_with_dests_[consumer_id] =
+        std::list<std::coroutine_handle<void>>();
+  }
+  to_dispatched_coroutines_with_dests_[consumer_id].push_back(
+      task.GetCoroutine());
+  to_dispatched_coroutines_count_++;
 }
 
 void EventLoop::ResigerConsumer() {
-  if (is_running_) {
-    throw arc::exception::detail::ExceptionBase(
-        "Cannot register consumer after starting running");
-  }
   event_loop_type_ = EventLoopType::CONSUMER | event_loop_type_;
   global_dispatcher_ = &GetGlobalCoroutineDispatcher();
   register_id_ = poller_->Register();
-  global_dispatcher_->RegisterConsumer(register_id_);
-  global_dispatcher_->WaitForRegistrationDone();
+  dispatcher_queue_ = global_dispatcher_->Register(register_id_);
+}
+
+void EventLoop::DeResigerConsumer() {
+  if ((event_loop_type_ & EventLoopType::CONSUMER) == EventLoopType::CONSUMER) {
+    event_loop_type_ = (event_loop_type_ & (~EventLoopType::CONSUMER));
+    ConsumeCoroutine();
+    global_dispatcher_->DeRegister(register_id_);
+    poller_->DeRegister();
+    dispatcher_queue_ = nullptr;
+    register_id_ = -1;
+  }
 }
 
 void EventLoop::ResigerProducer() {
-  if (is_running_) {
-    throw arc::exception::detail::ExceptionBase(
-        "Cannot register producer after starting running");
-  }
   event_loop_type_ = EventLoopType::PRODUCER | event_loop_type_;
   global_dispatcher_ = &GetGlobalCoroutineDispatcher();
 }
 
+void EventLoop::DeResigerProducer() {
+  event_loop_type_ = (event_loop_type_ & (~EventLoopType::PRODUCER));
+  while (to_dispatched_coroutines_count_ > 0) {
+    ProduceCoroutine();
+  }
+}
+
 void EventLoop::Trim() {
-  if ((EventLoopType::CONSUMER | event_loop_type_) == EventLoopType::CONSUMER) {
+  if ((EventLoopType::CONSUMER & event_loop_type_) == EventLoopType::CONSUMER) {
     ConsumeCoroutine();
   }
-  if ((EventLoopType::PRODUCER | event_loop_type_) == EventLoopType::PRODUCER) {
+  if ((EventLoopType::PRODUCER & event_loop_type_) == EventLoopType::PRODUCER) {
     ProduceCoroutine();
   }
 
@@ -109,36 +152,72 @@ void EventLoop::Trim() {
   poller_->TrimUserEvents();
 
   CleanUpFinishedCoroutines();
+
+  if (to_dispatched_coroutines_count_ != 0)
+    [[unlikely]] { poller_->SetNextTimeNoWait(); }
 }
 
 void EventLoop::ConsumeCoroutine() {
-  auto triggered_count = poller_->GetDispatchedCount();
+  auto triggered_count = dispatcher_queue_->GetRemainedItemsCount();
   if (triggered_count == 0) {
     return;
   }
-  auto coroutines =
-      global_dispatcher_->DequeueAll(register_id_, triggered_count);
+  auto coroutines = dispatcher_queue_->DequeAll(triggered_count);
   for (auto& coro : coroutines) {
     coro.resume();
   }
 }
 
 void EventLoop::ProduceCoroutine() {
-  if (to_dispatched_coroutines_.empty()) {
+  if (to_dispatched_coroutines_count_ == 0) {
     return;
   }
-  if (!global_dispatcher_->EnqueueAllToAny(to_dispatched_coroutines_.begin(),
-                                           to_dispatched_coroutines_.size())) {
-    auto itr = to_dispatched_coroutines_.begin();
-    // TODO this might cause infinite loop, find a better way to yield
-    while (itr != to_dispatched_coroutines_.end()) {
-      if (global_dispatcher_->EnqueueToAny(std::move(*itr))) {
-        itr = to_dispatched_coroutines_.erase(itr);
+  if (!to_randomly_dispatched_coroutines_.empty()) {
+    if (!global_dispatcher_->EnqueueAllToAny(
+            to_randomly_dispatched_coroutines_.begin(),
+            to_randomly_dispatched_coroutines_.size())) {
+      auto itr = to_randomly_dispatched_coroutines_.begin();
+      while (itr != to_randomly_dispatched_coroutines_.end()) {
+        if (global_dispatcher_->EnqueueToAny(std::move(*itr))) {
+          itr = to_randomly_dispatched_coroutines_.erase(itr);
+          to_dispatched_coroutines_count_--;
+        } else {
+          break;
+        }
       }
+    } else {
+      to_dispatched_coroutines_count_ -=
+          to_randomly_dispatched_coroutines_.size();
+      to_randomly_dispatched_coroutines_.clear();
     }
-  } else {
-    to_dispatched_coroutines_.clear();
   }
+  auto map_itr = to_dispatched_coroutines_with_dests_.begin();
+  while (map_itr != to_dispatched_coroutines_with_dests_.end()) {
+    assert(!map_itr->second.empty());
+    if (!global_dispatcher_->EnqueueAllToSpecific(
+            map_itr->first, map_itr->second.begin(), map_itr->second.size())) {
+      auto itr = map_itr->second.begin();
+      while (itr != map_itr->second.end()) {
+        if (global_dispatcher_->EnqueueToAny(std::move(*itr))) {
+          itr = map_itr->second.erase(itr);
+          to_dispatched_coroutines_count_--;
+        } else {
+          break;
+        }
+      }
+    } else {
+      to_dispatched_coroutines_count_ -= map_itr->second.size();
+      map_itr->second.clear();
+    }
+
+    if (map_itr->second.empty()) {
+      map_itr = to_dispatched_coroutines_with_dests_.erase(map_itr);
+    } else {
+      map_itr++;
+    }
+  }
+
+  return;
 }
 
 arc::coro::EventLoop& arc::coro::GetLocalEventLoop() {

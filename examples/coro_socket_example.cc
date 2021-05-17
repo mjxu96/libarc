@@ -46,6 +46,8 @@ const std::string ret =
     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     "aaaaa";
 
+std::atomic<int> total_client_count = 0;
+
 Task<void> LongTimeJob() {
   std::cout << "start of long time job" << std::endl;
   co_await SleepFor(std::chrono::seconds(5));
@@ -64,8 +66,12 @@ Task<void> HandleClient(
     Socket<Domain::IPV4, Protocol::TCP, Pattern::ASYNC> sock) {
   std::shared_ptr<char[]> data(new char[1024]);
   auto local_addr = sock.GetPeerAddress();
-  std::cout << "client ip: " << local_addr.GetHost()
-            << " port: " << local_addr.GetPort() << std::endl;
+  std::cout << "total clients: " << total_client_count.fetch_add(1)
+            << std::endl;
+  std::cout << std::hex << std::this_thread::get_id() << " handle this client"
+            << std::endl;
+  std::cout << "client ip: " << local_addr.GetHost() << " port: " << std::dec
+            << local_addr.GetPort() << std::endl;
   try {
     std::string received;
     bool connection_alive = true;
@@ -89,6 +95,9 @@ Task<void> HandleClient(
   } catch (const std::exception& e) {
     std::cerr << e.what() << '\n';
   }
+
+  // co_await SleepFor(std::chrono::seconds(1));
+  // GetLocalEventLoop().DeResigerConsumer();
 }
 
 Task<void> HandleClient(TLSSocket<Domain::IPV4, Pattern::ASYNC> sock) {
@@ -228,14 +237,18 @@ Task<void> DispatchAccept(int thread_num) {
     threads.emplace_back(StartLongTimeJob);
   }
   co_await SleepFor(std::chrono::seconds(1));
-  arc::coro::GetGlobalCoroutineDispatcher().SetRegistrationDone();
-  while (i < 1000) {
+  auto consumer_id = arc::coro::GetGlobalCoroutineDispatcher()
+                         .GetAvailableDispatchDestinations()[0];
+  while (i < 4000) {
     auto in_sock = co_await accpetor.Accept();
     std::cout << "accepted client " << i << std::endl;
     arc::coro::GetLocalEventLoop().Dispatch(HandleClient(std::move(in_sock)));
+    // arc::coro::GetLocalEventLoop().DispatchTo(HandleClient(std::move(in_sock)),
+    // consumer_id);
     i++;
   }
-  co_await SleepFor(std::chrono::seconds(1));
+  // co_await SleepFor(std::chrono::seconds(1));
+  // arc::coro::GetLocalEventLoop().DeResigerProducer();
   for (int i = 0; i < thread_num; i++) {
     threads[i].join();
   }
