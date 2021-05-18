@@ -60,11 +60,14 @@ class LockCoroTest : public ::testing::Test {
 
   arc::coro::Task<void> LockCoro(int num) {
     for (int i = 0; i < num; i++) {
+      // std::cerr << i << " try to acquired lock" << std::endl;
       co_await lock_.Acquire();
+      // std::cerr << i << " acquired lock" << std::endl;
       lock_value_++;
       co_await arc::coro::SleepFor(std::chrono::milliseconds(kWaitTimeMS_));
       EXPECT_EQ(lock_value_, 1);
       lock_value_--;
+      // std::cerr << i << "released lock" << std::endl;
       lock_.Release();
     }
   }
@@ -131,7 +134,7 @@ class LockCoroTest : public ::testing::Test {
 
 TEST_F(LockCoroTest, BasicLockTest) {
   int run_times = 20;
-  int per_num = 2;
+  int per_num = 10;
   auto elapsed = GetElapsedTimeMilliseconds(
       std::bind(&LockCoroTest::RunMultipleLockCoros, this, run_times, per_num));
   EXPECT_NEAR(run_times * per_num * kWaitTimeMS_, elapsed,

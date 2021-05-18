@@ -88,6 +88,9 @@ class EventLoop {
   inline events::EventHandleType GetEventHandle() const {
     return poller_->GetEventHandle();
   }
+  inline void TriggerUserEvent(events::UserEvent* event) {
+    return poller_->TriggerUserEvent(event);
+  }
 
   void AddToCleanUpCoroutine(std::coroutine_handle<> handle);
   void CleanUpFinishedCoroutines();

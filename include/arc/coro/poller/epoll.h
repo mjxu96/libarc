@@ -37,6 +37,7 @@
 #include <arc/io/io_base.h>
 #include <sys/epoll.h>
 
+#include <mutex>
 #include <deque>
 #include <list>
 #include <queue>
@@ -66,13 +67,15 @@ class Poller : public io::detail::IOBase {
 
   inline void SetNextTimeNoWait() { next_wait_timeout_ = 0; }
 
-  inline bool IsPollerDone() const {
-    return (total_io_events_ + time_events_.size() + user_events_.size() ==
-            0) &&
+  inline bool IsPollerDone() {
+    std::lock_guard<std::mutex> guard(user_event_lock_);
+    return (total_io_events_ + time_events_.size() +
+            pending_user_events_.size() + triggered_user_events_.size() == 0) &&
            (dispatch_fd_ == -1);
   }
 
-  inline int GetEventHandle() const { return event_fd_; }
+  inline int GetEventHandle() const { return user_event_fd_; }
+  void TriggerUserEvent(events::UserEvent* event);
 
   int Register();
   void DeRegister();
@@ -103,10 +106,11 @@ class Poller : public io::detail::IOBase {
       time_events_;
 
   // user events
-  int event_fd_{-1};
-  std::uint64_t event_read_{0};
+  int user_event_fd_{-1};
   bool is_event_fd_added_{false};
-  std::list<events::UserEvent*> user_events_;
+  std::mutex user_event_lock_;
+  std::list<events::UserEvent*> pending_user_events_;
+  std::list<events::UserEvent*> triggered_user_events_;
 
   // coro dispatcher related
   int dispatch_fd_{-1};

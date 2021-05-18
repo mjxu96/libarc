@@ -40,7 +40,7 @@ namespace coro {
 
 class Condition {
  public:
-  Condition() { core_ = new arc::events::detail::ConditionCore(); }
+  Condition() { core_ = new arc::coro::detail::ConditionCore(); }
 
   void NotifyOne() { core_->TriggerOne(); }
 
@@ -62,7 +62,7 @@ class Condition {
   Condition& operator=(Condition&&) = delete;
 
  private:
-  arc::events::detail::ConditionCore* core_{nullptr};
+  arc::coro::detail::ConditionCore* core_{nullptr};
 };
 
 }  // namespace coro

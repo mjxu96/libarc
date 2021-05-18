@@ -30,6 +30,7 @@
 #define LIBARC__CORO__EVENTS__USER_EVENT_H
 
 #include "event_base.h"
+#include <list>
 
 namespace arc {
 namespace events {
@@ -40,14 +41,15 @@ using EventHandleType = int;
 
 class UserEvent : public EventBase {
  public:
-  UserEvent(EventHandleType event_handle, std::coroutine_handle<void> handle)
-      : EventBase(handle), event_handle_(event_handle) {}
+  UserEvent(std::coroutine_handle<void> handle)
+      : EventBase(handle) {}
   ~UserEvent() = default;
-  virtual bool CanResume() { return true; }
-  virtual EventHandleType GetEventHandle() const { return event_handle_; }
+
+  void SetSelfIterator(const std::list<UserEvent*>::iterator& itr) { event_itr_ = itr; }
+  const std::list<UserEvent*>::iterator& GetIterator() const { return event_itr_; }
 
  protected:
-  EventHandleType event_handle_{-1};
+  std::list<UserEvent*>::iterator event_itr_;
 };
 
 }  // namespace events

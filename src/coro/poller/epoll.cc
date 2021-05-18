@@ -29,6 +29,7 @@
 #include <arc/coro/poller/epoll.h>
 #include <arc/exception/io.h>
 #include <sys/eventfd.h>
+#include <iostream>
 
 using namespace arc;
 using namespace arc::coro;
@@ -38,8 +39,8 @@ Poller::Poller() {
   if (fd_ < 0) {
     throw arc::exception::IOException("Epoll Creation Error");
   }
-  event_fd_ = eventfd(0, EFD_NONBLOCK);
-  if (event_fd_ < 0) {
+  user_event_fd_ = eventfd(0, EFD_NONBLOCK);
+  if (user_event_fd_ < 0) {
     throw arc::exception::IOException("EventFd Creation Error");
   }
   interesting_fds_.reserve(kMaxFdInArray_);
@@ -47,8 +48,8 @@ Poller::Poller() {
 }
 
 Poller::~Poller() {
-  if (event_fd_ >= 0) {
-    close(event_fd_);
+  if (user_event_fd_ >= 0) {
+    close(user_event_fd_);
   }
   if (dispatch_fd_ >= 0) {
     close(dispatch_fd_);
@@ -66,7 +67,7 @@ int Poller::WaitEvents(events::EventBase** todo_events) {
   // io events
   for (int i = 0; i < event_cnt; i++) {
     int fd = events_[i].data.fd;
-    if (fd == event_fd_) {
+    if (fd == user_event_fd_) {
       is_user_event_triggered = true;
       assert(events_[i].events & EPOLLIN);
       continue;
@@ -109,32 +110,24 @@ int Poller::WaitEvents(events::EventBase** todo_events) {
 
   // user events
   if (is_user_event_triggered) {
-    int read_bytes = read(event_fd_, &event_read_, sizeof(event_read_));
-    if (read_bytes != sizeof(event_read_)) {
+    std::lock_guard guard(user_event_lock_);
+    std::uint64_t event_read = 0;
+    int read_bytes = read(user_event_fd_, &event_read, sizeof(event_read));
+    if (read_bytes != sizeof(event_read)) {
       throw arc::exception::IOException("Read user event error");
     }
-    auto itr = user_events_.begin();
-    while (itr != user_events_.end()) {
-      auto user_event = (*itr);
+
+    auto triggered_itr = triggered_user_events_.begin();
+    while (triggered_itr != triggered_user_events_.end()) {
       if (todo_cnt < kMaxEventsSizePerWait) {
-        if (user_event->CanResume()) {
-          todo_events[todo_cnt] = user_event;
-          todo_cnt++;
-          // We do not directly resume this user event is because
-          // it might change the value below like dispatch_fd_, which
-          // will cause a read error
-          // user_event->Resume();
-          // delete user_event;
-          itr = user_events_.erase(itr);
-          continue;
-        } else {
-          itr++;
-        }
+        todo_events[todo_cnt] = *triggered_itr;
+        todo_cnt++;
+        triggered_itr = triggered_user_events_.erase(triggered_itr);
       } else {
         // need to do it in the next wait routine
-        event_read_ = 1;
-        int wrote = write(event_fd_, &event_read_, sizeof(event_read_));
-        if (wrote != sizeof(event_read_)) {
+        event_read = 1;
+        int wrote = write(user_event_fd_, &event_read, sizeof(event_read));
+        if (wrote != sizeof(event_read)) {
           throw arc::exception::IOException(
               "Write user event in epoll wait error");
         }
@@ -183,7 +176,9 @@ void Poller::AddTimeEvent(events::TimeEvent* event) {
 }
 
 void Poller::AddUserEvent(events::UserEvent* event) {
-  user_events_.push_back(event);
+  std::lock_guard guard(user_event_lock_);
+  pending_user_events_.push_back(event);
+  event->SetSelfIterator(std::prev(pending_user_events_.end()));
 }
 
 void Poller::RemoveAllIOEvents(int target_fd) {
@@ -268,15 +263,16 @@ void Poller::TrimIOEvents() {
 }
 
 void Poller::TrimUserEvents() {
-  bool should_add_epoll = !user_events_.empty();
+  std::lock_guard guard(user_event_lock_);
+  bool should_add_epoll = !pending_user_events_.empty() || !triggered_user_events_.empty();
   if (is_event_fd_added_ == should_add_epoll) {
     return;
   }
   int op = should_add_epoll ? EPOLL_CTL_ADD : EPOLL_CTL_DEL;
   epoll_event e_event{};
   e_event.events = EPOLLIN;
-  e_event.data.fd = event_fd_;
-  int epoll_ret = epoll_ctl(fd_, op, event_fd_, &e_event);
+  e_event.data.fd = user_event_fd_;
+  int epoll_ret = epoll_ctl(fd_, op, user_event_fd_, &e_event);
   if (epoll_ret != 0) {
     throw arc::exception::IOException("Epoll Error When Trimming User Events");
   }
@@ -295,6 +291,12 @@ void Poller::TrimTimeEvents() {
           .count();
   next_wait_timeout_ =
       std::max((std::int64_t)0, top_event->GetWakeupTime() - current_time);
+}
+
+void Poller::TriggerUserEvent(events::UserEvent* event) {
+  std::lock_guard guard(user_event_lock_);
+  pending_user_events_.erase(event->GetIterator());
+  triggered_user_events_.push_back(event);
 }
 
 int Poller::Register() {

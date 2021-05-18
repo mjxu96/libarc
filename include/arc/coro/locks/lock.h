@@ -36,7 +36,7 @@ namespace coro {
 
 class Lock {
  public:
-  Lock() { core_ = new arc::events::detail::LockCore(); }
+  Lock() { core_ = new arc::coro::detail::LockCore(); }
   ~Lock() { delete core_; }
 
   // Lock cannot be copied nor moved.
@@ -52,7 +52,7 @@ class Lock {
   friend class Condition;
 
  private:
-  arc::events::detail::LockCore* core_{nullptr};
+  arc::coro::detail::LockCore* core_{nullptr};
 };
 
 }  // namespace coro

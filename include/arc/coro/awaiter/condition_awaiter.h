@@ -31,23 +31,76 @@
 
 #include <arc/coro/eventloop.h>
 #include <arc/coro/events/condition_event.h>
-#include <arc/coro/events/lock_event.h>
+#include <arc/coro/awaiter/lock_awaiter.h>
 
 namespace arc {
 namespace coro {
 
+
+namespace detail {
+
+class ConditionCore {
+ public:
+  ConditionCore() = default;
+  ~ConditionCore() = default;
+
+  void Register(events::ConditionEvent* event, EventLoop* event_loop) {
+    std::lock_guard guard(lock_);
+    pending_events_pairs_.emplace(event, event_loop);
+    event_loop->AddUserEvent(event);
+  }
+
+  void TriggerOne() {
+    std::lock_guard guard(lock_);
+    if (pending_events_pairs_.empty()) {
+      return;
+    }
+    if (write(TriggerInternal(), &i_, sizeof(i_)) != sizeof(i_)) {
+      throw arc::exception::IOException("NotifyOne Error");
+    }
+  }
+
+  void TriggerAll() {
+    std::lock_guard guard(lock_);
+    std::unordered_set<int> to_notified_event_ids;
+    while (!pending_events_pairs_.empty()) {
+      to_notified_event_ids.insert(TriggerInternal());
+    }
+    for (int to_notified_event_id : to_notified_event_ids) {
+      if (write(to_notified_event_id, &i_, sizeof(i_)) != sizeof(i_)) {
+        throw arc::exception::IOException("NotifyOne Error");
+      }
+    }
+  }
+
+ private:
+  events::EventHandleType TriggerInternal() {
+    auto& pending_event_pair = pending_events_pairs_.front();
+    events::EventHandleType event_handle = pending_event_pair.second->GetEventHandle();
+    pending_event_pair.second->TriggerUserEvent(pending_event_pair.first);
+    pending_events_pairs_.pop();
+    return event_handle;
+  }
+
+  std::mutex lock_;
+  std::queue<std::pair<events::ConditionEvent*, EventLoop*>> pending_events_pairs_;
+  std::uint64_t i_{1};
+  static_assert(sizeof(i_) == 8U);
+};
+
+}  // namespace detail
+
 class [[nodiscard]] ConditionAwaiter {
  public:
-  ConditionAwaiter(arc::events::detail::ConditionCore * core,
-                   arc::events::detail::LockCore * lock_core)
+  ConditionAwaiter(arc::coro::detail::ConditionCore * core,
+                   arc::coro::detail::LockCore * lock_core)
       : core_(core), lock_core_(lock_core) {}
 
   bool await_ready() { return false; }
 
   template <arc::concepts::PromiseT PromiseType>
   void await_suspend(std::coroutine_handle<PromiseType> handle) {
-    GetLocalEventLoop().AddUserEvent(new events::ConditionEvent(
-        core_, GetLocalEventLoop().GetEventHandle(), handle));
+    core_->Register(new events::ConditionEvent(handle), &GetLocalEventLoop());
     if (lock_core_) {
       lock_core_->Unlock();
     }
@@ -56,8 +109,8 @@ class [[nodiscard]] ConditionAwaiter {
   void await_resume() {}
 
  private:
-  arc::events::detail::ConditionCore* core_{nullptr};
-  arc::events::detail::LockCore* lock_core_{nullptr};
+  arc::coro::detail::ConditionCore* core_{nullptr};
+  arc::coro::detail::LockCore* lock_core_{nullptr};
 };
 
 }  // namespace coro
