@@ -72,29 +72,29 @@ Task<void> HandleClient(
             << std::endl;
   std::cout << "client ip: " << local_addr.GetHost() << " port: " << std::dec
             << local_addr.GetPort() << std::endl;
-  try {
-    std::string received;
-    bool connection_alive = true;
-    while (connection_alive) {
-      while (true) {
-        auto recv = co_await sock.Recv(data.get(), 1024);
+
+  std::string received;
+  bool connection_alive = true;
+  while (connection_alive) {
+    while (true) {
+      auto recv = co_await sock.Recv(data.get(), 1024);
+      if (recv >= 0) {
         received.append(data.get(), recv);
-        if (recv < 1024) {
-          if (recv == 0) {
-            connection_alive = false;
-          }
-          break;
-        }
       }
-      // std::cout << received << std::endl;
-      if (connection_alive) {
-        co_await sock.Send(ret.c_str(), ret.size());
+      if (recv < 1024) {
+        if (recv <= 0) {
+          connection_alive = false;
+        }
+        break;
       }
     }
-
-  } catch (const std::exception& e) {
-    std::cerr << e.what() << '\n';
+    // std::cout << received << std::endl;
+    if (connection_alive) {
+      co_await sock.Send(ret.c_str(), ret.size());
+    }
   }
+  std::cout << "connection closed, errno: " << errno << std::endl;
+
 
   // co_await SleepFor(std::chrono::seconds(1));
   // GetLocalEventLoop().DeResigerConsumer();
@@ -105,28 +105,27 @@ Task<void> HandleClient(TLSSocket<Domain::IPV4, Pattern::ASYNC> sock) {
   auto local_addr = sock.GetPeerAddress();
   // std::cout << "client ip: " << local_addr.GetHost() << " port: " <<
   // local_addr.GetPort() << std::endl;
-  try {
-    std::string received;
-    bool connection_alive = true;
-    while (connection_alive) {
-      while (true) {
-        auto recv = co_await sock.Recv(data.get(), 1024);
+  std::string received;
+  bool connection_alive = true;
+  while (connection_alive) {
+    while (true) {
+      auto recv = co_await sock.Recv(data.get(), 1024);
+      if (recv >= 0) {
         received.append(data.get(), recv);
-        if (recv < 1024) {
-          if (recv == 0) {
-            connection_alive = false;
-          }
-          break;
-        }
       }
-      // std::cout << received << std::endl;
-      if (connection_alive) {
-        co_await sock.Send(ret.c_str(), ret.size());
+      if (recv < 1024) {
+        if (recv <= 0) {
+          connection_alive = false;
+        }
+        break;
       }
     }
-  } catch (const std::exception& e) {
-    std::cerr << e.what() << '\n';
+    // std::cout << received << std::endl;
+    if (connection_alive) {
+      co_await sock.Send(ret.c_str(), ret.size());
+    }
   }
+  std::cout << "connection closed, errno: " << errno << std::endl;
 }
 
 Task<void> Listen() {

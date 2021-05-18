@@ -133,7 +133,7 @@ class Socket : public detail::SocketBase<AF,
       (UPP == Pattern::SYNC) void Connect(const net::Address<AF>& addr) {
     int res = connect(this->fd_, addr.GetCStyleAddress(), addr.AddressSize());
     if (res < 0) {
-      throw arc::exception::IOException();
+      throw arc::exception::IOException("Connection error");
     }
   }
 

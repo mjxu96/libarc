@@ -118,7 +118,9 @@ class SocketCoroTest : public ::testing::Test {
       std::string received;
       while (true) {
         auto recv = co_await client.Recv(data.get(), received_size_per_read);
-        received.append(data.get(), recv);
+        if (recv >= 0) {
+          received.append(data.get(), recv);
+        }
         if (recv < received_size_per_read) {
           if (recv == 0) {
             connection_alive = false;

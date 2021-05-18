@@ -65,15 +65,13 @@ class SocketBase : public IOBase {
       fd_ = socket(static_cast<int>(AF), static_cast<int>(ST),
                    static_cast<int>(P));
     } else {
-      fd_ = socket(static_cast<int>(AF), static_cast<int>(ST), 0);
-      // TODO below maybe useful in the future.
-      // protoent* protocol_info =
-      // getprotobyname(nameof::nameof_enum<P>().data()); if (protocol_info) {
-      //   fd_ = socket(static_cast<int>(AF), static_cast<int>(ST),
-      //                protocol_info->p_proto);
-      // } else {
-      //   fd_ = socket(static_cast<int>(AF), static_cast<int>(ST), 0);
-      // }
+      protoent* protocol_info = getprotobyname(nameof::nameof_enum<P>().data());
+      if (protocol_info) {
+        fd_ = socket(static_cast<int>(AF), static_cast<int>(ST),
+                     protocol_info->p_proto);
+      } else {
+        fd_ = socket(static_cast<int>(AF), static_cast<int>(ST), 0);
+      }
     }
     if (fd_ < 0) {
       throw arc::exception::IOException();
@@ -170,11 +168,7 @@ class SocketBase : public IOBase {
   template <net::Protocol UP = P>
   requires(UP != net::Protocol::UDP) ssize_t
       Send(const void* data, int num, int flags = 0) {
-    ssize_t sent = send(this->fd_, data, num, flags);
-    if (sent < 0 && (errno != EAGAIN || errno != EWOULDBLOCK)) {
-      throw arc::exception::IOException();
-    }
-    return sent;
+    return send(this->fd_, data, num, flags);
   }
 
   template <net::Protocol UP = P>
@@ -185,24 +179,17 @@ class SocketBase : public IOBase {
   template <net::Domain UAF, net::Protocol UP = P>
   requires(UP == net::Protocol::UDP) ssize_t
       SendTo(const void* data, int num, const net::Address<UAF>* addr) {
-    ssize_t sent = sendto(this->fd_, data, num, 0,
-                          (addr ? addr->GetCStyleAddress() : nullptr),
-                          (addr ? addr->AddressSize() : 0));
-    if (sent < 0 && (errno != EAGAIN || errno != EWOULDBLOCK)) {
-      throw arc::exception::IOException();
-    }
-    return sent;
+    return sendto(this->fd_, data, num, 0,
+                  (addr ? addr->GetCStyleAddress() : nullptr),
+                  (addr ? addr->AddressSize() : 0));
   }
 
   template <net::Protocol UP = P>
   requires(UP != net::Protocol::UDP) ssize_t
       Recv(char* buf, int max_recv_bytes, int flags = 0) {
-    ssize_t ret = recv(this->fd_, buf, max_recv_bytes, flags);
-    if (ret < 0 && (errno != EAGAIN || errno != EWOULDBLOCK)) {
-      throw arc::exception::IOException();
-    }
-    return ret;
+    return recv(this->fd_, buf, max_recv_bytes, flags);
   }
+
   template <net::Protocol UP = P>
   requires(UP != net::Protocol::UDP) ssize_t
       Read(char* buf, int max_recv_bytes) {
@@ -216,10 +203,9 @@ class SocketBase : public IOBase {
     socklen_t in_addr_len;
     ssize_t tmp_read =
         recvfrom(this->fd_, buf, max_recv_bytes, 0, &in_addr, &in_addr_len);
-    if (tmp_read == -1 && (errno != EAGAIN || errno != EWOULDBLOCK)) {
-      throw arc::exception::IOException();
+    if (tmp_read >= 0) {
+      (*addr) = *((CAddressType*)(&in_addr));
     }
-    (*addr) = *((CAddressType*)(&in_addr));
     return tmp_read;
   }
 

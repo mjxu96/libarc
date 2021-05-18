@@ -103,11 +103,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
 
   template <Pattern UPP = PP>
   requires(UPP == Pattern::SYNC) ssize_t Recv(char* buf, int max_recv_bytes) {
-    ssize_t tmp_read = SSL_read(ssl_.ssl, buf, max_recv_bytes);
-    if (tmp_read == -1) {
-      throw arc::exception::TLSException("Read Error");
-    }
-    return tmp_read;
+    return SSL_read(ssl_.ssl, buf, max_recv_bytes);
   }
 
   template <Pattern UPP = PP>
@@ -132,7 +128,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
         } else if (err == SSL_ERROR_SYSCALL && errno == 0) {
           co_return 0;
         } else {
-          throw exception::TLSException("Read Error");
+          co_return ret;
         }
       } else {
         co_return ret;
@@ -142,11 +138,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
 
   template <Pattern UPP = PP>
   requires(UPP == Pattern::SYNC) int Send(const void* data, int num) {
-    int writtern_size = SSL_write(ssl_.ssl, data, num);
-    if (writtern_size < 0) {
-      throw arc::exception::TLSException("Write Error");
-    }
-    return writtern_size;
+    return SSL_write(ssl_.ssl, data, num);
   }
 
   template <Pattern UPP = PP, concepts::Writable DataType>
@@ -177,7 +169,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
               std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
               this->fd_, arc::io::IOType::WRITE);
         } else {
-          throw exception::TLSException("Write Error", err);
+          co_return ret;
         }
       }
     } while (ret < 0);
