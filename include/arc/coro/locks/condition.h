@@ -51,7 +51,31 @@ class Condition {
     co_await lock.Acquire();
   }
 
+  Task<void> Wait(Lock& lock, const CancellationToken& token) {
+    co_await ConditionAwaiter(core_, lock.core_, token);
+    co_await lock.Acquire();
+  }
+
+  Task<void> WaitFor(Lock& lock,
+                     const std::chrono::system_clock::duration& duration) {
+    CancellationToken token;
+    EnsureFuture(TimeoutAfter(token, duration));
+    auto awaiter = ConditionAwaiter(core_, lock.core_, token);
+    co_await awaiter;
+    co_await lock.Acquire();
+  }
+
   ConditionAwaiter Wait() { return ConditionAwaiter(core_, nullptr); }
+
+  Task<void> Wait(const CancellationToken& token) {
+    co_await ConditionAwaiter(core_, nullptr, token);
+  }
+
+  Task<void> WaitFor(const std::chrono::system_clock::duration& duration) {
+    CancellationToken token;
+    EnsureFuture(TimeoutAfter(token, duration));
+    co_await ConditionAwaiter(core_, nullptr, token);
+  }
 
   ~Condition() { delete core_; }
 
@@ -62,6 +86,12 @@ class Condition {
   Condition& operator=(Condition&&) = delete;
 
  private:
+  Task<void> TimeoutAfter(CancellationToken token,
+                          std::chrono::system_clock::duration duration) {
+    co_await SleepFor(duration);
+    token.Cancel();
+  }
+
   arc::coro::detail::ConditionCore* core_{nullptr};
 };
 

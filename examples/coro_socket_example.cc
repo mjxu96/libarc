@@ -58,7 +58,7 @@ void StartLongTimeJob() {
   GetLocalEventLoop().ResigerConsumer();
   std::cout << "registered self as consumer" << std::endl;
   // StartEventLoop(LongTimeJob());
-  RunUntilComplelete();
+  RunUntilComplete();
   std::cout << "coro done" << std::endl;
 }
 

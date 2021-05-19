@@ -30,6 +30,7 @@
 #include <arc/coro/eventloop.h>
 #include <arc/coro/locks/condition.h>
 #include <arc/coro/locks/lock.h>
+#include <arc/coro/utils/cancellation_token.h>
 #include <arc/coro/task.h>
 
 #include <chrono>
@@ -42,6 +43,38 @@ Condition cond;
 Lock lock;
 
 std::atomic<int> stage_count;
+
+Task<void> CoroTimeoutWait(std::chrono::seconds seconds) {
+  auto now = std::chrono::steady_clock::now();
+  co_await cond.WaitFor(seconds);
+  auto then = std::chrono::steady_clock::now();
+  std::cout << "wait finish spend: " << (std::chrono::duration_cast<std::chrono::milliseconds>(then - now).count()) << std::endl;
+}
+
+void RunCoroTimeoutWait(int seconds, int num_per_thread) {
+  for (int i = 0; i < num_per_thread; i++) {
+    EnsureFuture(CoroTimeoutWait(std::chrono::seconds(seconds)));
+  }
+  RunUntilComplete();
+}
+
+void MultiThreadRunCoroTimeoutWait(int thread_num, int num_per_thread, int seconds) {
+  std::vector<std::thread> threads;
+  for (int i = 0; i < thread_num; i++) {
+    threads.emplace_back(&RunCoroTimeoutWait, seconds, num_per_thread);
+  }
+  std::this_thread::sleep_for(std::chrono::milliseconds(seconds * 500));
+  cond.NotifyAll();
+  for (int i = 0; i < thread_num; i++) {
+    threads[i].join();
+  }
+}
+
+Task<void> WakeupBeforeTimeout(int seconds) {
+  EnsureFuture(CoroTimeoutWait(std::chrono::seconds(seconds)));
+  co_await SleepFor(std::chrono::milliseconds(seconds * 500));
+  cond.NotifyOne();
+}
 
 Task<void> CoroWait() {
   // co_await cond.Wait();
@@ -75,14 +108,14 @@ void StartCoroWait(int num) {
   for (int i = 0; i < num; i++) {
     EnsureFuture(CoroWait());
   }
-  RunUntilComplelete();
+  RunUntilComplete();
 }
 
 void StartLockWait(int num) {
   for (int i = 0; i < num; i++) {
     EnsureFuture(LockWait());
   }
-  RunUntilComplelete();
+  RunUntilComplete();
 }
 
 Task<void> StartCondition(int thread_num) {
@@ -153,6 +186,9 @@ Task<void> StartLock(int thread_num) {
 int main() {
   // StartEventLoop(StartCondition(5));
   // StartLockWait(100);
-  StartEventLoop(StartLock(3));
+  // StartEventLoop(StartLock(3));
+  // StartEventLoop(CoroTimeoutWait(std::chrono::seconds(1)));
+  // StartEventLoop(WakeupBeforeTimeout(2));
+  MultiThreadRunCoroTimeoutWait(10, 10, 1);
   return 0;
 }

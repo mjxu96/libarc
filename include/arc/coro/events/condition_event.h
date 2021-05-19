@@ -40,7 +40,7 @@
 
 namespace arc {
 
-namespace events {
+namespace coro {
 
 class ConditionEvent : public UserEvent {
  public:
@@ -52,7 +52,7 @@ class ConditionEvent : public UserEvent {
 
 };
 
-}  // namespace events
+}  // namespace coro
 }  // namespace arc
 
 #endif

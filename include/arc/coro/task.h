@@ -273,7 +273,7 @@ class [[nodiscard]] Task {
 
 void EnsureFuture(Task<void>&& task);
 
-void RunUntilComplelete();
+void RunUntilComplete();
 
 void StartEventLoop(Task<void>&& task);
 

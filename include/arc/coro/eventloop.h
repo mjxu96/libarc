@@ -74,22 +74,32 @@ class EventLoop {
   void InitDo();
   void Do();
 
-  inline void AddIOEvent(events::IOEvent* event) { poller_->AddIOEvent(event); }
+  inline void AddIOEvent(coro::IOEvent* event) { poller_->AddIOEvent(event); }
 
-  inline void AddTimeEvent(events::TimeEvent* event) {
+  inline void AddTimeEvent(coro::TimeEvent* event) {
     poller_->AddTimeEvent(event);
   }
 
-  inline void AddUserEvent(events::UserEvent* event) {
+  inline void AddUserEvent(coro::UserEvent* event) {
     poller_->AddUserEvent(event);
   }
 
+  inline void AddCancellationEvent(coro::CancellationEvent* event) {
+    poller_->AddCancellationEvent(event);
+  }
+
   inline void RemoveAllIOEvents(int fd) { poller_->RemoveAllIOEvents(fd); }
-  inline events::EventHandleType GetEventHandle() const {
+
+  inline coro::EventHandleType GetEventHandle() const {
     return poller_->GetEventHandle();
   }
-  inline void TriggerUserEvent(events::UserEvent* event) {
+
+  inline void TriggerUserEvent(coro::UserEvent* event) {
     return poller_->TriggerUserEvent(event);
+  }
+
+  inline void TriggerCancellationEvent(int bind_event_id, coro::CancellationEvent* event) {
+    return poller_->TriggerCancellationEvent(bind_event_id, event);
   }
 
   void AddToCleanUpCoroutine(std::coroutine_handle<> handle);
@@ -115,7 +125,7 @@ class EventLoop {
   const static int kMaxConsumableCoroutineNum_ = 4;
 
   // poller related
-  events::EventBase* todo_events_[2 * kMaxEventsSizePerWait_] = {nullptr};
+  coro::EventBase* todo_events_[2 * kMaxEventsSizePerWait_] = {nullptr};
 
   std::vector<std::coroutine_handle<>> to_clean_up_handles_{};
 

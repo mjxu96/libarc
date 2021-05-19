@@ -36,14 +36,14 @@
 #include "user_event.h"
 
 namespace arc {
-namespace events {
+namespace coro {
 
 class LockEvent : public UserEvent {
  public:
   LockEvent(std::coroutine_handle<void> handle) : UserEvent(handle) {}
   virtual ~LockEvent() = default;
 };
-}  // namespace events
+}  // namespace coro
 }  // namespace arc
 
 #endif

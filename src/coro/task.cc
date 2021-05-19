@@ -32,7 +32,7 @@ using namespace arc::coro;
 
 void arc::coro::EnsureFuture(Task<void>&& task) { task.Start(true); }
 
-void arc::coro::RunUntilComplelete() {
+void arc::coro::RunUntilComplete() {
   auto& event_loop = GetLocalEventLoop();
   event_loop.InitDo();
   while (!event_loop.IsDone()) {
@@ -43,7 +43,7 @@ void arc::coro::RunUntilComplelete() {
 
 void arc::coro::StartEventLoop(Task<void>&& task) {
   task.Start(true);
-  RunUntilComplelete();
+  RunUntilComplete();
 }
 
 TimeAwaiter arc::coro::SleepFor(

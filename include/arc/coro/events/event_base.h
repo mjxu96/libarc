@@ -41,7 +41,7 @@ using experimental::coroutine_handle;
 #endif
 
 namespace arc {
-namespace events {
+namespace coro {
 
 class EventBase {
  public:
@@ -53,11 +53,20 @@ class EventBase {
     handle_.resume();
   }
 
+  inline void SetEventID(int event_id) {
+    event_id_ = event_id;
+  }
+
+  inline const int GetEventID() const {
+    return event_id_;
+  }
+
  protected:
   std::coroutine_handle<void> handle_{nullptr};
+  int event_id_{-1};
 };
 
-}  // namespace events
+}  // namespace coro
 }  // namespace arc
 
 #endif /* LIBARC__CORO__EVENTS__EVENT_BASE_H */

@@ -57,7 +57,7 @@ class [[nodiscard]] IOAwaiter {
 
   template <arc::concepts::PromiseT PromiseType>
   void await_suspend(std::coroutine_handle<PromiseType> handle) {
-    GetLocalEventLoop().AddIOEvent(new events::IOEvent(fd_, io_type_, handle));
+    GetLocalEventLoop().AddIOEvent(new coro::IOEvent(fd_, io_type_, handle));
   }
 
  private:

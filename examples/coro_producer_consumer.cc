@@ -102,7 +102,7 @@ void Consume(CoroQueue<int>* q, int id_start) {
   for (int i = id_start; i < id_start + cons_num_per_thread; i++) {
     EnsureFuture(ConsumeCoro(q, i));
   }
-  RunUntilComplelete();
+  RunUntilComplete();
 }
 
 CoroQueue<int> coro_queue;

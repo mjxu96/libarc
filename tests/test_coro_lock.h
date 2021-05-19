@@ -88,7 +88,7 @@ class LockCoroTest : public ::testing::Test {
     for (int i = 0; i < num; i++) {
       arc::coro::EnsureFuture(CondCoro());
     }
-    arc::coro::RunUntilComplelete();
+    arc::coro::RunUntilComplete();
   }
 
   arc::coro::Task<void> RunMultipleCondCorosInMultithreads(int thread_num,
@@ -116,7 +116,7 @@ class LockCoroTest : public ::testing::Test {
     for (int i = 0; i < num; i++) {
       arc::coro::EnsureFuture(LockCoro(per_num));
     }
-    arc::coro::RunUntilComplelete();
+    arc::coro::RunUntilComplete();
   }
 
   void RunMultipleLockCorosInMultithreads(int thread_num, int num,

@@ -33,7 +33,7 @@
 #include <list>
 
 namespace arc {
-namespace events {
+namespace coro {
 
 #ifdef __linux__
 using EventHandleType = int;
@@ -45,14 +45,14 @@ class UserEvent : public EventBase {
       : EventBase(handle) {}
   ~UserEvent() = default;
 
-  void SetSelfIterator(const std::list<UserEvent*>::iterator& itr) { event_itr_ = itr; }
+  void SetIterator(const std::list<UserEvent*>::iterator& itr) { event_itr_ = itr; }
   const std::list<UserEvent*>::iterator& GetIterator() const { return event_itr_; }
 
  protected:
   std::list<UserEvent*>::iterator event_itr_;
 };
 
-}  // namespace events
+}  // namespace coro
 }  // namespace arc
 
 #endif

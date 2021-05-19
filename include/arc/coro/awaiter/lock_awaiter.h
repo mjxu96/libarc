@@ -58,7 +58,7 @@ class LockCore {
     is_locked_ = true;
   }
 
-  void AddPendingEventPair(events::LockEvent* event, EventLoop* event_loop) {
+  void AddPendingEventPair(coro::LockEvent* event, EventLoop* event_loop) {
     event_loop->AddUserEvent(event);
     pending_event_pairs_.emplace(event, event_loop);
   }
@@ -81,7 +81,7 @@ class LockCore {
 
  private:
   std::mutex lock_;
-  std::queue<std::pair<events::LockEvent*, EventLoop*>> pending_event_pairs_{};
+  std::queue<std::pair<coro::LockEvent*, EventLoop*>> pending_event_pairs_{};
   bool is_locked_{false};
 };
 
@@ -103,7 +103,7 @@ class [[nodiscard]] LockAwaiter {
 
   template <arc::concepts::PromiseT PromiseType>
   void await_suspend(std::coroutine_handle<PromiseType> handle) {
-    core_->AddPendingEventPair(new events::LockEvent(handle), &GetLocalEventLoop());
+    core_->AddPendingEventPair(new coro::LockEvent(handle), &GetLocalEventLoop());
     core_->CoreUnlock();
   }
 
@@ -111,7 +111,7 @@ class [[nodiscard]] LockAwaiter {
 
  private:
   detail::LockCore* core_{nullptr};
-  arc::events::EventHandleType event_handle_{-1};
+  arc::coro::EventHandleType event_handle_{-1};
 };
 
 }  // namespace coro

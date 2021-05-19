@@ -33,7 +33,7 @@
 #include "event_base.h"
 
 namespace arc {
-namespace events {
+namespace coro {
 
 class TimeEvent : public EventBase {
  public:
@@ -56,6 +56,6 @@ class TimeEventComparator {
   }
 };
 
-}  // namespace events
+}  // namespace coro
 }  // namespace arc
 #endif

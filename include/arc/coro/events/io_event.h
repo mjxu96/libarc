@@ -36,7 +36,7 @@
 #include <unistd.h>
 
 namespace arc {
-namespace events {
+namespace coro {
 
 class IOEvent : public EventBase {
  public:
@@ -53,7 +53,7 @@ class IOEvent : public EventBase {
   io::IOType io_type_{};
 };
 
-}  // namespace events
+}  // namespace coro
 }  // namespace arc
 
 #endif /* LIBARC__CORO__EVENTS__IO_EVENT_H */
