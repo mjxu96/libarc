@@ -35,7 +35,7 @@
 namespace arc {
 namespace coro {
 
-class TimeEvent : public EventBase {
+class TimeEvent : virtual public EventBase {
  public:
   TimeEvent(std::int64_t wakeup_time, std::coroutine_handle<void> handle)
       : EventBase(handle), wakeup_time_(wakeup_time) {}
@@ -43,10 +43,17 @@ class TimeEvent : public EventBase {
   virtual ~TimeEvent() {}
 
   const inline std::int64_t GetWakeupTime() const { return wakeup_time_; }
-  friend class TimeEventComparator;
 
- private:
+  const inline bool IsValid() const { return is_valid_; }
+  inline void SetValidity(bool is_valid) { is_valid_ = is_valid; }
+
+  const inline bool IsTrigger() const { return is_trigger_; }
+
+  friend class TimeEventComparator;
+ protected:
   std::int64_t wakeup_time_ = 0;
+  bool is_valid_{true};
+  bool is_trigger_{false};
 };
 
 class TimeEventComparator {

@@ -39,11 +39,11 @@ namespace coro {
 using EventHandleType = int;
 #endif
 
-class UserEvent : public EventBase {
+class UserEvent : virtual public EventBase {
  public:
   UserEvent(std::coroutine_handle<void> handle)
       : EventBase(handle) {}
-  ~UserEvent() = default;
+  virtual ~UserEvent() = default;
 
   void SetIterator(const std::list<UserEvent*>::iterator& itr) { event_itr_ = itr; }
   const std::list<UserEvent*>::iterator& GetIterator() const { return event_itr_; }

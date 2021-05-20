@@ -277,7 +277,7 @@ void RunUntilComplete();
 
 void StartEventLoop(Task<void>&& task);
 
-TimeAwaiter SleepFor(const std::chrono::system_clock::duration& duration);
+TimeAwaiter SleepFor(const std::chrono::steady_clock::duration& duration);
 
 TimeAwaiter Yield();
 

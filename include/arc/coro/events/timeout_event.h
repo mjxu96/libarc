@@ -1,7 +1,7 @@
 /*
- * File: cancellationl_event.h
+ * File: timeout_event.h
  * Project: libarc
- * File Created: Wednesday, 19th May 2021 8:11:25 pm
+ * File Created: Thursday, 20th May 2021 7:48:55 pm
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
@@ -26,23 +26,31 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef LIBARC__CORO__EVENTS__CANCELLATION_EVENT_H
-#define LIBARC__CORO__EVENTS__CANCELLATION_EVENT_H
+#ifndef LIBARC__CORO__EVENTS__TIMEOUT_EVENT_H
+#define LIBARC__CORO__EVENTS__TIMEOUT_EVENT_H
 
 #include "bound_event.h"
+
 namespace arc {
 namespace coro {
-  
 
-class CancellationEvent : public BoundEvent {
+class TimeoutEvent : public TimeEvent, public BoundEvent {
  public:
-  CancellationEvent(UserEvent* event)
-      : BoundEvent(event, detail::TriggerType::USER_EVENT), EventBase(nullptr) {}
-  CancellationEvent(IOEvent* event)
-      : BoundEvent(event, detail::TriggerType::USER_EVENT), EventBase(nullptr) {}
+  TimeoutEvent(std::int64_t wakeup_time, UserEvent* event)
+      : TimeEvent(wakeup_time, nullptr),
+        BoundEvent(event, detail::TriggerType::TIME_EVENT),
+        EventBase(nullptr) {
+    is_trigger_ = true;
+  }
+  TimeoutEvent(std::int64_t wakeup_time, IOEvent* event)
+      : TimeEvent(wakeup_time, nullptr),
+        BoundEvent(event, detail::TriggerType::TIME_EVENT),
+        EventBase(nullptr) {
+    is_trigger_ = true;
+  }
 };
 
-} // namespace coro
-} // namespace arc
+}  // namespace coro
+}  // namespace arc
 
 #endif

@@ -95,22 +95,38 @@ int Poller::WaitEvents(coro::EventBase** todo_events) {
         std::chrono::duration_cast<std::chrono::milliseconds>(
             (std::chrono::steady_clock::now()).time_since_epoch())
             .count();
-    while (!time_events_.empty() && todo_cnt < kMaxEventsSizePerWait &&
-           current_time >= time_events_.top()->GetWakeupTime()) {
-      todo_events[todo_cnt] = time_events_.top();
-      time_events_.pop();
-      todo_cnt++;
+
+    while (!time_events_.empty()) {
+      if (!time_events_.top()->IsValid()) {
+        delete time_events_.top();
+        time_events_.pop();
+        continue;
+      }
+      if ((todo_cnt >= kMaxEventsSizePerWait) ||
+          (current_time < time_events_.top()->GetWakeupTime())) {
+        break;
+      }
+      auto top_time_event = time_events_.top();
+      if (top_time_event->IsTrigger()) [[unlikely]] {
+        TriggerBoundEvent(
+            static_cast<TimeoutEvent*>(top_time_event)->GetBountEventID(),
+            static_cast<TimeoutEvent*>(top_time_event));
+        time_events_.pop();
+      } else {
+        todo_events[todo_cnt] = top_time_event;
+        self_triggered_event_ids_[todo_cnt] =
+            todo_events[todo_cnt]->GetEventID();
+        time_events_.pop();
+        todo_cnt++;
+      }
     }
   }
 
-  if (!is_user_event_triggered) {
-    std::lock_guard guard(user_event_lock_);
-    RemoveCancellationEvent(todo_cnt);
-  } else {
-    // user events or dispatched events
-    std::lock_guard guard(user_event_lock_);
-
-    std::uint64_t event_read = 0;
+  std::lock_guard guard(poller_lock_);
+  // user events or dispatched events
+  bool need_to_write_again = false;
+  std::uint64_t event_read = 0;
+  if (is_user_event_triggered) {
     int read_bytes = read(user_event_fd_, &event_read, sizeof(event_read));
     if (read_bytes != sizeof(event_read)) {
       throw arc::exception::IOException(
@@ -118,7 +134,6 @@ int Poller::WaitEvents(coro::EventBase** todo_events) {
     }
 
     // check triggered user event
-    bool need_to_write_again = false;
     auto triggered_event_itr = triggered_user_events_.begin();
     while (triggered_event_itr != triggered_user_events_.end()) {
       if (todo_cnt < kMaxEventsSizePerWait) {
@@ -132,38 +147,37 @@ int Poller::WaitEvents(coro::EventBase** todo_events) {
         break;
       }
     }
+  }
 
-    // remove triggered cancellation events
-    RemoveCancellationEvent(todo_cnt);
+  // remove triggered bound events
+  RemoveBoundEvent(todo_cnt);
 
-    // check triggered cancellation event
-    auto triggered_cancellation_itr = triggered_cancellation_events_.begin();
-    while (triggered_cancellation_itr != triggered_cancellation_events_.end()) {
-      if (todo_cnt < kMaxEventsSizePerWait) {
-        auto triggered_bind_event =
-            PopCancelledEvent(*triggered_cancellation_itr);
-        if (triggered_bind_event) {
-          todo_events[todo_cnt] = triggered_bind_event;
-          todo_cnt++;
-        }
-      } else {
-        need_to_write_again = true;
-        break;
+  // check triggered bound event
+  auto triggered_bound_event_itr = triggered_bound_events_.begin();
+  while (triggered_bound_event_itr != triggered_bound_events_.end()) {
+    if (todo_cnt < kMaxEventsSizePerWait) {
+      auto triggered_bound_event = PopBoundEvent(*triggered_bound_event_itr);
+      if (triggered_bound_event) {
+        todo_events[todo_cnt] = triggered_bound_event;
+        todo_cnt++;
       }
-      delete *triggered_cancellation_itr;
-      triggered_cancellation_itr =
-          triggered_cancellation_events_.erase(triggered_cancellation_itr);
+    } else {
+      need_to_write_again = true;
+      break;
     }
+    delete *triggered_bound_event_itr;
+    triggered_bound_event_itr =
+        triggered_bound_events_.erase(triggered_bound_event_itr);
+  }
 
-    // re-write again if todo count supercede the max allowed events
-    if (need_to_write_again) {
-      // need to do it in the next wait routine
-      event_read = 1;
-      int wrote = write(user_event_fd_, &event_read, sizeof(event_read));
-      if (wrote != sizeof(event_read)) {
-        throw arc::exception::IOException(
-            "Write user event or dispatched event in epoll wait error");
-      }
+  // re-write again if todo count supercede the max allowed events
+  if (need_to_write_again) {
+    // need to do it in the next wait routine
+    event_read = 1;
+    int wrote = write(user_event_fd_, &event_read, sizeof(event_read));
+    if (wrote != sizeof(event_read)) {
+      throw arc::exception::IOException(
+          "Write user event or dispatched event in epoll wait error");
     }
   }
 
@@ -200,18 +214,21 @@ void Poller::AddTimeEvent(coro::TimeEvent* event) {
 }
 
 void Poller::AddUserEvent(coro::UserEvent* event) {
-  std::lock_guard guard(user_event_lock_);
+  std::lock_guard guard(poller_lock_);
   event->SetEventID(max_event_id_.fetch_add(1, std::memory_order::relaxed));
   pending_user_events_.push_back(event);
   event->SetIterator(std::prev(pending_user_events_.end()));
 }
 
-void Poller::AddCancellationEvent(coro::CancellationEvent* event) {
-  std::lock_guard guard(user_event_lock_);
-  pending_cancellation_events_.push_back(event);
-  auto itr = std::prev(pending_cancellation_events_.end());
-  event_pending_cancallation_token_map_[event->GetBindEventID()] = itr;
+void Poller::AddBoundEvent(coro::BoundEvent* event) {
+  std::lock_guard guard(poller_lock_);
+  pending_bound_events_.push_back(event);
+  auto itr = std::prev(pending_bound_events_.end());
+  event_pending_bound_token_map_[event->GetBountEventID()] = itr;
   event->SetIterator(itr);
+  if (event->GetTriggerType() == detail::TriggerType::TIME_EVENT) {
+    time_events_.push(static_cast<TimeoutEvent*>(event));
+  }
 }
 
 void Poller::RemoveAllIOEvents(int target_fd) {
@@ -295,7 +312,7 @@ void Poller::TrimIOEvents() {
 }
 
 void Poller::TrimUserEvents() {
-  std::lock_guard guard(user_event_lock_);
+  std::lock_guard guard(poller_lock_);
   bool should_add_epoll = !pending_user_events_.empty() ||
                           !triggered_user_events_.empty() ||
                           is_dispatcher_registered_;
@@ -314,6 +331,11 @@ void Poller::TrimUserEvents() {
 }
 
 void Poller::TrimTimeEvents() {
+  // first pop up invalid time event (e.g. triggered timeout event)
+  while (!time_events_.empty() && !time_events_.top()->IsValid()) {
+    delete time_events_.top();
+    time_events_.pop();
+  }
   if (time_events_.empty()) {
     next_wait_timeout_ = -1;  // wait infinitely if no time event
     return;
@@ -328,30 +350,29 @@ void Poller::TrimTimeEvents() {
 }
 
 void Poller::TriggerUserEvent(coro::UserEvent* event) {
-  std::lock_guard guard(user_event_lock_);
+  std::lock_guard guard(poller_lock_);
   pending_user_events_.erase(event->GetIterator());
   triggered_user_events_.push_back(event);
 }
 
-void Poller::TriggerCancellationEvent(int bind_event_id,
-                                      coro::CancellationEvent* event) {
-  std::lock_guard guard(user_event_lock_);
-  if (event_pending_cancallation_token_map_.find(bind_event_id) !=
-      event_pending_cancallation_token_map_.end()) {
-    pending_cancellation_events_.erase(event->GetIterator());
-    triggered_cancellation_events_.push_back(event);
-    event_pending_cancallation_token_map_.erase(bind_event_id);
+void Poller::TriggerBoundEvent(int bound_event_id, coro::BoundEvent* event) {
+  std::lock_guard guard(poller_lock_);
+  if (event_pending_bound_token_map_.find(bound_event_id) !=
+      event_pending_bound_token_map_.end()) {
+    pending_bound_events_.erase(event->GetIterator());
+    triggered_bound_events_.push_back(event);
+    event_pending_bound_token_map_.erase(bound_event_id);
   }
 }
 
 int Poller::Register() {
-  std::lock_guard guard(user_event_lock_);
+  std::lock_guard guard(poller_lock_);
   is_dispatcher_registered_ = true;
   return user_event_fd_;
 }
 
 void Poller::DeRegister() {
-  std::lock_guard guard(user_event_lock_);
+  std::lock_guard guard(poller_lock_);
   is_dispatcher_registered_ = false;
 }
 
@@ -391,16 +412,17 @@ int Poller::GetExistingIOEvent(int fd) {
   return cur;
 }
 
-EventBase* Poller::PopCancelledEvent(coro::CancellationEvent* event) {
-  switch (event->GetType()) {
-    case detail::CancellationType::IO_EVENT: {
-      int fd = static_cast<int>(event->GetBindHelper());
+EventBase* Poller::PopBoundEvent(coro::BoundEvent* event) {
+  switch (event->GetBountEventType()) {
+    case detail::BoundType::IO_EVENT: {
+      int fd = static_cast<int>(event->GetBoundHelper());
       if (fd < kMaxFdInArray_) {
         for (auto& vec : io_events_[fd]) {
           for (auto itr = vec.begin(); itr != vec.end(); itr++) {
-            if ((*itr)->GetEventID() == event->GetBindEventID()) {
-              assert(event->GetEvent() == (*itr));
+            if ((*itr)->GetEventID() == event->GetBountEventID()) {
+              assert(event->GetBoundEvent() == (*itr));
               interesting_fds_.insert(fd);
+              total_io_events_--;
               vec.erase(itr);
               return *itr;
             }
@@ -409,8 +431,8 @@ EventBase* Poller::PopCancelledEvent(coro::CancellationEvent* event) {
       } else {
         for (auto& vec : extra_io_events_[fd]) {
           for (auto itr = vec.begin(); itr != vec.end(); itr++) {
-            if ((*itr)->GetEventID() == event->GetBindEventID()) {
-              assert(event->GetEvent() == (*itr));
+            if ((*itr)->GetEventID() == event->GetBountEventID()) {
+              assert(event->GetBoundEvent() == (*itr));
               interesting_fds_.insert(fd);
               vec.erase(itr);
               return *itr;
@@ -420,18 +442,18 @@ EventBase* Poller::PopCancelledEvent(coro::CancellationEvent* event) {
       }
       break;
     }
-    case detail::CancellationType::USER_EVENT: {
+    case detail::BoundType::USER_EVENT: {
       for (auto itr = pending_user_events_.begin();
            itr != pending_user_events_.end(); itr++) {
-        if ((*itr)->GetEventID() == event->GetBindEventID()) {
-          assert(event->GetEvent() == *itr);
+        if ((*itr)->GetEventID() == event->GetBountEventID()) {
+          assert(event->GetBoundEvent() == *itr);
           pending_user_events_.erase(itr);
-          return event->GetEvent();
+          return event->GetBoundEvent();
         }
       }
       break;
     }
-    case detail::CancellationType::TIME_EVENT: {
+    case detail::BoundType::TIME_EVENT: {
       throw arc::exception::detail::ExceptionBase(
           "Cancelling a time event is not allowed");
       break;
@@ -444,16 +466,20 @@ EventBase* Poller::PopCancelledEvent(coro::CancellationEvent* event) {
   return nullptr;
 }
 
-void Poller::RemoveCancellationEvent(int count) {
-  for (int i = 0; i < count && !event_pending_cancallation_token_map_.empty();
-       i++) {
+void Poller::RemoveBoundEvent(int count) {
+  for (int i = 0; i < count && !event_pending_bound_token_map_.empty(); i++) {
     int event_id = self_triggered_event_ids_[i];
-    if (event_pending_cancallation_token_map_.find(event_id) !=
-        event_pending_cancallation_token_map_.end()) {
-      auto itr = event_pending_cancallation_token_map_[event_id];
+    if (event_pending_bound_token_map_.find(event_id) !=
+        event_pending_bound_token_map_.end()) {
+      auto itr = event_pending_bound_token_map_[event_id];
+      event_pending_bound_token_map_.erase(event_id);
+      auto bound_event = *itr;
+      pending_bound_events_.erase(itr);
+      if (bound_event->GetTriggerType() == detail::TriggerType::TIME_EVENT) {
+        static_cast<TimeoutEvent*>(bound_event)->SetValidity(false);
+        continue;
+      }
       delete *itr;
-      event_pending_cancallation_token_map_.erase(event_id);
-      pending_cancellation_events_.erase(itr);
     }
   }
 }

@@ -32,9 +32,12 @@
 #include <arc/concept/coro.h>
 #include <arc/coro/eventloop.h>
 #include <arc/coro/events/io_event.h>
+#include <arc/coro/events/timeout_event.h>
+#include <arc/coro/utils/cancellation_token.h>
 #include <arc/exception/io.h>
 
 #include <functional>
+#include <variant>
 
 namespace arc {
 namespace coro {
@@ -42,12 +45,32 @@ namespace coro {
 template <typename ReadyFunctor, typename ResumeFunctor>
 class [[nodiscard]] IOAwaiter {
  public:
-  IOAwaiter(ReadyFunctor && ready_functor, ResumeFunctor && resume_functor,
+  IOAwaiter(ReadyFunctor&& ready_functor, ResumeFunctor&& resume_functor,
             int fd, io::IOType io_type)
       : ready_functor_(std::forward<ReadyFunctor>(ready_functor)),
         resume_functor_(std::forward<ResumeFunctor>(resume_functor)),
         fd_(fd),
         io_type_(io_type) {}
+
+  IOAwaiter(ReadyFunctor&& ready_functor, ResumeFunctor&& resume_functor,
+            int fd, io::IOType io_type, const CancellationToken& token)
+      : ready_functor_(std::forward<ReadyFunctor>(ready_functor)),
+        resume_functor_(std::forward<ResumeFunctor>(resume_functor)),
+        fd_(fd),
+        io_type_(io_type),
+        abort_handle_(std::make_shared<CancellationToken>(token)) {}
+
+  IOAwaiter(ReadyFunctor&& ready_functor, ResumeFunctor&& resume_functor,
+            int fd, io::IOType io_type,
+            const std::chrono::steady_clock::duration& sleep_time)
+      : ready_functor_(std::forward<ReadyFunctor>(ready_functor)),
+        resume_functor_(std::forward<ResumeFunctor>(resume_functor)),
+        fd_(fd),
+        io_type_(io_type),
+        abort_handle_(std::chrono::duration_cast<std::chrono::milliseconds>(
+                          (std::chrono::steady_clock::now() + sleep_time)
+                              .time_since_epoch())
+                          .count()) {}
 
   bool await_ready() { return ready_functor_(); }
 
@@ -57,7 +80,18 @@ class [[nodiscard]] IOAwaiter {
 
   template <arc::concepts::PromiseT PromiseType>
   void await_suspend(std::coroutine_handle<PromiseType> handle) {
-    GetLocalEventLoop().AddIOEvent(new coro::IOEvent(fd_, io_type_, handle));
+    auto io_event = new coro::IOEvent(fd_, io_type_, handle);
+    auto event_loop = &GetLocalEventLoop();
+    event_loop->AddIOEvent(io_event);
+    if (abort_handle_.index() == 1) [[unlikely]] {
+      auto cancellation_event = new coro::CancellationEvent(io_event);
+      std::get<1>(abort_handle_)
+          ->SetEventAndLoop(cancellation_event, event_loop);
+    } else if (abort_handle_.index() == 2) [[unlikely]] {
+      auto timeout_event =
+          new coro::TimeoutEvent(std::get<2>(abort_handle_), io_event);
+      event_loop->AddBoundEvent(timeout_event);
+    }
   }
 
  private:
@@ -66,6 +100,9 @@ class [[nodiscard]] IOAwaiter {
 
   ResumeFunctor resume_functor_;
   ReadyFunctor ready_functor_;
+
+  std::variant<std::monostate, std::shared_ptr<CancellationToken>, std::int64_t>
+      abort_handle_;
 };
 
 }  // namespace coro

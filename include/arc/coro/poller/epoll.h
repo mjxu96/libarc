@@ -32,6 +32,7 @@
 #ifdef __linux__
 
 #include <arc/coro/events/cancellation_event.h>
+#include <arc/coro/events/timeout_event.h>
 #include <arc/coro/events/condition_event.h>
 #include <arc/coro/events/io_event.h>
 #include <arc/coro/events/time_event.h>
@@ -58,7 +59,7 @@ class Poller : public io::detail::IOBase {
   void AddIOEvent(coro::IOEvent* event);
   void AddTimeEvent(coro::TimeEvent* event);
   void AddUserEvent(coro::UserEvent* event);
-  void AddCancellationEvent(coro::CancellationEvent* event);
+  void AddBoundEvent(coro::BoundEvent* event);
 
   void RemoveAllIOEvents(int target_fd);
 
@@ -71,19 +72,20 @@ class Poller : public io::detail::IOBase {
   inline void SetNextTimeNoWait() { next_wait_timeout_ = 0; }
 
   inline bool IsPollerDone() {
-    std::lock_guard<std::mutex> guard(user_event_lock_);
-    return (total_io_events_ + time_events_.size() +
+    std::lock_guard<std::mutex> guard(poller_lock_);
+    auto ret = (total_io_events_ + time_events_.size() +
                 pending_user_events_.size() + triggered_user_events_.size() +
-                pending_cancellation_events_.size() +
-                triggered_cancellation_events_.size() ==
+                pending_bound_events_.size() +
+                triggered_bound_events_.size() ==
             0) &&
            (!is_dispatcher_registered_);
+    return ret;
   }
 
   inline int GetEventHandle() const { return user_event_fd_; }
   void TriggerUserEvent(coro::UserEvent* event);
-  void TriggerCancellationEvent(int bind_event_id,
-                                coro::CancellationEvent* event);
+  void TriggerBoundEvent(int bound_event_id,
+                                coro::BoundEvent* event);
 
   int Register();
   void DeRegister();
@@ -95,7 +97,7 @@ class Poller : public io::detail::IOBase {
 
   int next_wait_timeout_ = -1;
 
-  std::atomic<int> max_event_id_{0};
+  std::atomic<std::uint64_t> max_event_id_{0};
 
   // io events
   int total_io_events_{0};
@@ -118,15 +120,15 @@ class Poller : public io::detail::IOBase {
   // user events
   int user_event_fd_{-1};
   bool is_event_fd_added_{false};
-  std::mutex user_event_lock_;
+  std::mutex poller_lock_;
   std::list<coro::UserEvent*> pending_user_events_;
   std::list<coro::UserEvent*> triggered_user_events_;
 
   // cancellation events
-  std::list<coro::CancellationEvent*> pending_cancellation_events_;
-  std::list<coro::CancellationEvent*> triggered_cancellation_events_;
-  std::unordered_map<int, std::list<coro::CancellationEvent*>::iterator>
-      event_pending_cancallation_token_map_;
+  std::list<coro::BoundEvent*> pending_bound_events_;
+  std::list<coro::BoundEvent*> triggered_bound_events_;
+  std::unordered_map<std::uint64_t, std::list<coro::BoundEvent*>::iterator>
+      event_pending_bound_token_map_;
   int self_triggered_event_ids_[kMaxEventsSizePerWait] = {0};
 
   // coro dispatcher related
@@ -137,8 +139,10 @@ class Poller : public io::detail::IOBase {
 
   int GetExistingIOEvent(int fd);
   coro::IOEvent* PopIOEvent(int fd, io::IOType event_type);
-  EventBase* PopCancelledEvent(coro::CancellationEvent* event);
-  void RemoveCancellationEvent(int count);
+  EventBase* PopBoundEvent(coro::BoundEvent* event);
+  void RemoveBoundEvent(int count);
+  void TriggerBoundEventInternal(int bound_event_id,
+                                coro::BoundEvent* event);
 };
 
 }  // namespace coro

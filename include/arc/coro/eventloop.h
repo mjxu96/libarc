@@ -84,8 +84,8 @@ class EventLoop {
     poller_->AddUserEvent(event);
   }
 
-  inline void AddCancellationEvent(coro::CancellationEvent* event) {
-    poller_->AddCancellationEvent(event);
+  inline void AddBoundEvent(coro::BoundEvent* event) {
+    poller_->AddBoundEvent(event);
   }
 
   inline void RemoveAllIOEvents(int fd) { poller_->RemoveAllIOEvents(fd); }
@@ -98,8 +98,8 @@ class EventLoop {
     return poller_->TriggerUserEvent(event);
   }
 
-  inline void TriggerCancellationEvent(int bind_event_id, coro::CancellationEvent* event) {
-    return poller_->TriggerCancellationEvent(bind_event_id, event);
+  inline void TriggerBoundEvent(int bind_event_id, coro::BoundEvent* event) {
+    return poller_->TriggerBoundEvent(bind_event_id, event);
   }
 
   void AddToCleanUpCoroutine(std::coroutine_handle<> handle);

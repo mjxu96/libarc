@@ -34,6 +34,8 @@
 #include <arc/coro/events/condition_event.h>
 #include <arc/coro/utils/cancellation_token.h>
 
+#include <variant>
+
 namespace arc {
 namespace coro {
 
@@ -103,7 +105,17 @@ class [[nodiscard]] ConditionAwaiter {
                    const CancellationToken& token)
       : core_(core),
         lock_core_(lock_core),
-        token_(std::make_shared<CancellationToken>(token)) {}
+        abort_handle_(std::make_shared<CancellationToken>(token)) {}
+
+  ConditionAwaiter(arc::coro::detail::ConditionCore* core,
+                   arc::coro::detail::LockCore* lock_core,
+                   const std::chrono::steady_clock::duration& timeout)
+      : core_(core),
+        lock_core_(lock_core),
+        abort_handle_(std::chrono::duration_cast<std::chrono::milliseconds>(
+                          (std::chrono::steady_clock::now() + timeout)
+                              .time_since_epoch())
+                          .count()) {}
 
   bool await_ready() { return false; }
 
@@ -112,9 +124,14 @@ class [[nodiscard]] ConditionAwaiter {
     auto event = new coro::ConditionEvent(handle);
     EventLoop* event_loop = &GetLocalEventLoop();
     core_->Register(event, event_loop);
-    if (token_) {
+    if (abort_handle_.index() == 1) {
       auto cancellation_event = new coro::CancellationEvent(event);
-      token_->SetEventAndLoop(cancellation_event, event_loop);
+      std::get<1>(abort_handle_)
+          ->SetEventAndLoop(cancellation_event, event_loop);
+    } else if (abort_handle_.index() == 2) {
+      auto timeout_event =
+          new coro::TimeoutEvent(std::get<2>(abort_handle_), event);
+      event_loop->AddBoundEvent(timeout_event);
     }
     if (lock_core_) {
       lock_core_->Unlock();
@@ -127,7 +144,8 @@ class [[nodiscard]] ConditionAwaiter {
   arc::coro::detail::ConditionCore* core_{nullptr};
   arc::coro::detail::LockCore* lock_core_{nullptr};
 
-  std::shared_ptr<CancellationToken> token_{nullptr};
+  std::variant<std::monostate, std::shared_ptr<CancellationToken>, std::int64_t>
+      abort_handle_;
 };
 
 }  // namespace coro

@@ -72,12 +72,15 @@ Task<void> HandleClient(
             << std::endl;
   std::cout << "client ip: " << local_addr.GetHost() << " port: " << std::dec
             << local_addr.GetPort() << std::endl;
+  std::cout << "socket fd: " << sock.GetFd() << std::endl;
 
   std::string received;
   bool connection_alive = true;
+  int recv = 0;
   while (connection_alive) {
     while (true) {
-      auto recv = co_await sock.Recv(data.get(), 1024);
+      // recv = co_await sock.Recv(data.get(), 1024, std::chrono::seconds(2));
+      recv = co_await sock.Recv(data.get(), 1024);
       if (recv >= 0) {
         received.append(data.get(), recv);
       }
@@ -93,7 +96,7 @@ Task<void> HandleClient(
       co_await sock.Send(ret.c_str(), ret.size());
     }
   }
-  std::cout << "connection closed, errno: " << errno << std::endl;
+  std::cout << "connection closed, " << recv << " errno: " << errno << std::endl;
 
 
   // co_await SleepFor(std::chrono::seconds(1));
@@ -103,13 +106,15 @@ Task<void> HandleClient(
 Task<void> HandleClient(TLSSocket<Domain::IPV4, Pattern::ASYNC> sock) {
   std::shared_ptr<char[]> data(new char[1024]);
   auto local_addr = sock.GetPeerAddress();
-  // std::cout << "client ip: " << local_addr.GetHost() << " port: " <<
-  // local_addr.GetPort() << std::endl;
+  std::cout << "client ip: " << local_addr.GetHost() << " port: " <<
+  local_addr.GetPort() << std::endl;
   std::string received;
   bool connection_alive = true;
+  int recv = 0;
   while (connection_alive) {
     while (true) {
-      auto recv = co_await sock.Recv(data.get(), 1024);
+      recv = co_await sock.Recv(data.get(), 1024, std::chrono::seconds(2));
+      // recv = co_await sock.Recv(data.get(), 1024);
       if (recv >= 0) {
         received.append(data.get(), recv);
       }
@@ -125,7 +130,7 @@ Task<void> HandleClient(TLSSocket<Domain::IPV4, Pattern::ASYNC> sock) {
       co_await sock.Send(ret.c_str(), ret.size());
     }
   }
-  std::cout << "connection closed, errno: " << errno << std::endl;
+  std::cout << "connection closed, " << recv << " errno: " << errno << std::endl;
 }
 
 Task<void> Listen() {
@@ -140,7 +145,7 @@ Task<void> Listen() {
             << " port: " << local_addr.GetPort() << std::endl;
   std::cout << "http listen starts" << std::endl;
   int i = 0;
-  while (i < 405) {
+  while (i < 2) {
     auto in_sock = co_await accpetor.Accept();
     arc::coro::EnsureFuture(HandleClient(std::move(in_sock)));
     i++;

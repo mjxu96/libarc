@@ -47,7 +47,7 @@ void arc::coro::StartEventLoop(Task<void>&& task) {
 }
 
 TimeAwaiter arc::coro::SleepFor(
-    const std::chrono::system_clock::duration& duration) {
+    const std::chrono::steady_clock::duration& duration) {
   return TimeAwaiter(duration);
 }
 

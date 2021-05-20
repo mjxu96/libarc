@@ -50,12 +50,12 @@ class CancellationTokenCore {
     }
   }
 
-  void SetEventAndLoop(CancellationEvent* event, EventLoop* loop) {
+  void SetEventAndLoop(BoundEvent* event, EventLoop* loop) {
     std::lock_guard guard(lock_);
     event_ = event;
-    bind_event_id_ = event->GetBindEventID();
+    bind_event_id_ = event->GetBountEventID();
     loop_ = loop;
-    loop_->AddCancellationEvent(event);
+    loop_->AddBoundEvent(event);
   }
 
   void Cancel() {
@@ -69,15 +69,20 @@ class CancellationTokenCore {
     event_ = nullptr;
   }
 
+  bool IsCancelled() {
+    std::lock_guard guard(lock_);
+    return !event_;
+  }
+
  private:
   int TriggerCancel() {
-    loop_->TriggerCancellationEvent(bind_event_id_, event_);
+    loop_->TriggerBoundEvent(bind_event_id_, event_);
     std::uint64_t event_read = 1;
     return write(loop_->GetEventHandle(), &event_read, sizeof(event_read));
   }
 
   std::mutex lock_;
-  CancellationEvent* event_{nullptr};
+  BoundEvent* event_{nullptr};
   int bind_event_id_{-1};
   EventLoop* loop_{nullptr};
 };
@@ -88,7 +93,7 @@ class CancellationToken {
  public:
   CancellationToken() : core_(std::make_shared<detail::CancellationTokenCore>()) {}
 
-  void SetEventAndLoop(CancellationEvent* event, EventLoop* loop) {
+  void SetEventAndLoop(BoundEvent* event, EventLoop* loop) {
     core_->SetEventAndLoop(event, loop);
   }
 
@@ -96,6 +101,10 @@ class CancellationToken {
 
   void Cancel() { 
     core_->Cancel(); }
+
+  bool IsCancelled() {
+    return core_->IsCancelled();
+  }
 
  private:
   std::shared_ptr<detail::CancellationTokenCore> core_{nullptr};

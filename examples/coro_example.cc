@@ -103,10 +103,10 @@ int test111() {
 
 Task<void> SleepTime(int seconds) {
   std::cout << "before sleep for " << seconds << std::endl;
-  auto now = std::chrono::system_clock::now();
+  auto now = std::chrono::steady_clock::now();
   co_await SleepFor(std::chrono::seconds(seconds));
   auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
-                     std::chrono::system_clock::now() - now)
+                     std::chrono::steady_clock::now() - now)
                      .count();
   std::cout << "after sleep for " << seconds << " actually slept for "
             << elapsed << std::endl;
