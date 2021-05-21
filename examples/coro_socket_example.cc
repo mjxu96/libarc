@@ -242,7 +242,7 @@ Task<void> DispatchAccept(int thread_num) {
     threads.emplace_back(StartLongTimeJob);
   }
   co_await SleepFor(std::chrono::seconds(1));
-  auto consumer_id = arc::coro::GetGlobalCoroutineDispatcher()
+  auto consumer_id = arc::coro::CoroutineDispatcher::GetInstance()
                          .GetAvailableDispatchDestinations()[0];
   while (i < 4000) {
     auto in_sock = co_await accpetor.Accept();
@@ -279,11 +279,11 @@ int main(int argc, char** argv) {
   // for (int i = 0; i < thread_num; i++) {
   //   threads[i].join();
   // }
-  // DispatchHttpStart(thread_num);
+  DispatchHttpStart(thread_num);
 
   // std::cout << "finished" << std::endl;
   // StartEventLoop(Connect());
   // StartEventLoop(TLSConnect());
-  StartEventLoop(Listen());
+  // StartEventLoop(Listen());
   // StartEventLoop(TLSAccept());
 }

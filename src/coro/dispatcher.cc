@@ -28,10 +28,9 @@
 
 #include <arc/coro/dispatcher.h>
 
-std::mutex global_dispatcher_lock;
+using namespace arc::coro;
 
-arc::coro::CoroutineDispatcher& arc::coro::GetGlobalCoroutineDispatcher() {
-  std::lock_guard guard(global_dispatcher_lock);
-  static arc::coro::CoroutineDispatcher dispatcher;
+CoroutineDispatcher& CoroutineDispatcher::GetInstance() {
+  static CoroutineDispatcher dispatcher;
   return dispatcher;
 }

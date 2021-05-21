@@ -107,7 +107,7 @@ class EventLoop {
 
   void Dispatch(Task<void>&& task);
   void DispatchTo(Task<void>&& task,
-                  CoroutineDispatcherRegisterIDType event_loop_id);
+                  EventLoopWakeUpHandle event_loop_id);
 
   void ResigerConsumer();
   void DeResigerConsumer();
@@ -131,14 +131,14 @@ class EventLoop {
 
   // dispatched events
   std::list<std::coroutine_handle<>> to_randomly_dispatched_coroutines_{};
-  std::unordered_map<CoroutineDispatcherRegisterIDType,
+  std::unordered_map<EventLoopWakeUpHandle,
                      std::list<std::coroutine_handle<>>>
       to_dispatched_coroutines_with_dests_{};
   int to_dispatched_coroutines_count_{0};
-  CoroutineDispatcherRegisterIDType register_id_{-1};
+  EventLoopWakeUpHandle register_id_{-1};
   EventLoopType event_loop_type_{EventLoopType::NONE};
   CoroutineDispatcher* global_dispatcher_{nullptr};
-  CoroutineDispatcherQueue* dispatcher_queue_{nullptr};
+  CoroutineQueue* dispatcher_queue_{nullptr};
   void ConsumeCoroutine();
   void ProduceCoroutine();
 };

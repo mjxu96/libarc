@@ -97,7 +97,7 @@ void EventLoop::Dispatch(arc::coro::Task<void>&& task) {
 }
 
 void EventLoop::DispatchTo(arc::coro::Task<void>&& task,
-                           CoroutineDispatcherRegisterIDType consumer_id) {
+                           EventLoopWakeUpHandle consumer_id) {
   task.SetNeedClean(true);
   if (to_dispatched_coroutines_with_dests_.find(consumer_id) ==
       to_dispatched_coroutines_with_dests_.end()) {
@@ -111,7 +111,7 @@ void EventLoop::DispatchTo(arc::coro::Task<void>&& task,
 
 void EventLoop::ResigerConsumer() {
   event_loop_type_ = EventLoopType::CONSUMER | event_loop_type_;
-  global_dispatcher_ = &GetGlobalCoroutineDispatcher();
+  global_dispatcher_ = &CoroutineDispatcher::GetInstance();
   register_id_ = poller_->Register();
   dispatcher_queue_ = global_dispatcher_->Register(register_id_);
 }
@@ -129,7 +129,7 @@ void EventLoop::DeResigerConsumer() {
 
 void EventLoop::ResigerProducer() {
   event_loop_type_ = EventLoopType::PRODUCER | event_loop_type_;
-  global_dispatcher_ = &GetGlobalCoroutineDispatcher();
+  global_dispatcher_ = &CoroutineDispatcher::GetInstance();
 }
 
 void EventLoop::DeResigerProducer() {
@@ -153,8 +153,9 @@ void EventLoop::Trim() {
 
   CleanUpFinishedCoroutines();
 
-  if (to_dispatched_coroutines_count_ != 0)
-    [[unlikely]] { poller_->SetNextTimeNoWait(); }
+  if (to_dispatched_coroutines_count_ != 0) [[unlikely]] {
+    poller_->SetNextTimeNoWait();
+  }
 }
 
 void EventLoop::ConsumeCoroutine() {

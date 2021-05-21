@@ -70,7 +70,7 @@ class DispatcherCoroTest : public ::testing::Test {
   }
 
   coro::Task<void> ProduceTask(int produce_count, int consumer_count,
-                               coro::CoroutineDispatcherRegisterIDType target) {
+                               coro::EventLoopWakeUpHandle target) {
     coro::GetLocalEventLoop().ResigerProducer();
     co_await lock_.Acquire();
     while (prepared_consumer_count_ < consumer_count) {
@@ -99,7 +99,7 @@ class DispatcherCoroTest : public ::testing::Test {
   }
 
   void StartProducerTask(int produce_count, int consumer_count,
-                         coro::CoroutineDispatcherRegisterIDType target) {
+                         coro::EventLoopWakeUpHandle target) {
     coro::StartEventLoop(ProduceTask(produce_count, consumer_count, target));
   }
 };
@@ -147,8 +147,8 @@ TEST_F(DispatcherCoroTest, BiasedDispatchTest) {
                                      producer_count);
   std::this_thread::sleep_for(
       std::chrono::milliseconds(100));  // make sure we register above consumer
-  coro::CoroutineDispatcherRegisterIDType target =
-      coro::GetGlobalCoroutineDispatcher()
+  coro::EventLoopWakeUpHandle target =
+      coro::CoroutineDispatcher::GetInstance()
           .GetAvailableDispatchDestinations()[0];
 
   for (int i = 0; i < consumer_count; i++) {

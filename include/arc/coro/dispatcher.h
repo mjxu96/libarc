@@ -55,25 +55,24 @@ namespace arc {
 namespace coro {
 
 #ifdef __linux__
-using CoroutineDispatcherRegisterIDType = int;
+using EventLoopWakeUpHandle = int;
 #endif
 
-class CoroutineDispatcherConsumerToken {
+class CoroutineConsumerToken {
  public:
-  CoroutineDispatcherConsumerToken(
+  CoroutineConsumerToken(
       moodycamel::ConcurrentQueue<std::coroutine_handle<void>>& queue,
-      CoroutineDispatcherRegisterIDType consumer_id)
+      EventLoopWakeUpHandle consumer_id)
       : token(queue), id(consumer_id) {}
-  CoroutineDispatcherRegisterIDType id{-1};
+  EventLoopWakeUpHandle id{-1};
   moodycamel::ConsumerToken token;
 };
 
 // MPSC queue
-class CoroutineDispatcherQueue {
+class CoroutineQueue {
  public:
-  CoroutineDispatcherQueue(int capacity, int max_explicit_producer_count,
-                           int max_implicit_producer_count,
-                           CoroutineDispatcherRegisterIDType id)
+  CoroutineQueue(int capacity, int max_explicit_producer_count,
+                 int max_implicit_producer_count, EventLoopWakeUpHandle id)
       : queue_(capacity, max_explicit_producer_count,
                max_implicit_producer_count),
         token_(queue_, id) {}
@@ -111,6 +110,9 @@ class CoroutineDispatcherQueue {
   }
 
   std::vector<std::coroutine_handle<void>> DequeAll(int count) {
+    if (count <= 0) {
+      return std::vector<std::coroutine_handle<void>>();
+    }
     std::vector<std::coroutine_handle<void>> ret(count, 0);
     std::coroutine_handle<void>* now = &ret[0];
     int remained_size = count;
@@ -128,11 +130,11 @@ class CoroutineDispatcherQueue {
     return remained_items_.load(std::memory_order::acquire);
   }
 
-  friend class CoroutineDispatcherConsumerToken;
+  friend class CoroutineConsumerToken;
 
  private:
   moodycamel::ConcurrentQueue<std::coroutine_handle<void>> queue_;
-  CoroutineDispatcherConsumerToken token_;
+  CoroutineConsumerToken token_;
   std::atomic<int> remained_items_{0};
 };
 
@@ -147,22 +149,23 @@ class CoroutineDispatcher {
   }
 
   ~CoroutineDispatcher() {
-    for (CoroutineDispatcherRegisterIDType id : consumer_ids_) {
+    for (EventLoopWakeUpHandle id : consumer_ids_) {
       auto queue_ptr = GetCoroutineQueue(id);
       assert(queue_ptr != nullptr);
       delete queue_ptr;
     }
   }
 
-  std::vector<CoroutineDispatcherRegisterIDType>
-  GetAvailableDispatchDestinations() {
+  static CoroutineDispatcher& GetInstance();
+
+  std::vector<EventLoopWakeUpHandle> GetAvailableDispatchDestinations() {
     std::lock_guard guard(global_addition_lock_);
     return consumer_ids_;
   }
 
   bool EnqueueToAny(std::coroutine_handle<void>&& handle) {
     std::lock_guard guard(global_addition_lock_);
-    CoroutineDispatcherRegisterIDType next_consumer_id = GetNextConsumer();
+    EventLoopWakeUpHandle next_consumer_id = GetNextConsumer();
     auto queue_ptr = GetCoroutineQueue(next_consumer_id);
     bool ret = queue_ptr->Enqueue(std::move(handle));
     if (ret) {
@@ -171,7 +174,7 @@ class CoroutineDispatcher {
     return ret;
   }
 
-  bool EnqueueToSpecific(CoroutineDispatcherRegisterIDType consumer_id,
+  bool EnqueueToSpecific(EventLoopWakeUpHandle consumer_id,
                          std::coroutine_handle<void>&& handle) {
     std::lock_guard guard(global_addition_lock_);
     auto queue_ptr = GetCoroutineQueue(consumer_id);
@@ -189,8 +192,8 @@ class CoroutineDispatcher {
   }
 
   template <typename It>
-  bool EnqueueAllToSpecific(CoroutineDispatcherRegisterIDType consumer_id,
-                            It it, int count) {
+  bool EnqueueAllToSpecific(EventLoopWakeUpHandle consumer_id, It it,
+                            int count) {
     std::lock_guard guard(global_addition_lock_);
     auto queue_ptr = GetCoroutineQueue(consumer_id);
     bool ret = queue_ptr->EnqueueBulk(it, count);
@@ -200,8 +203,7 @@ class CoroutineDispatcher {
     return ret;
   }
 
-  CoroutineDispatcherQueue* Register(
-      CoroutineDispatcherRegisterIDType consumer_id) {
+  CoroutineQueue* Register(EventLoopWakeUpHandle consumer_id) {
     std::lock_guard guard(global_addition_lock_);
     bool existed = consumer_id < kMaxInVecQueueCount_
                        ? queues_[consumer_id] != nullptr
@@ -212,8 +214,8 @@ class CoroutineDispatcher {
           " has already been registered.");
     }
 
-    auto queue_ptr = new CoroutineDispatcherQueue(
-        kCoroutineQueueDefaultSize_, 0, kMaxAllowedProducerCount_, consumer_id);
+    auto queue_ptr = new CoroutineQueue(kCoroutineQueueDefaultSize_, 0,
+                                        kMaxAllowedProducerCount_, consumer_id);
     if (consumer_id < kMaxInVecQueueCount_) {
       queues_[consumer_id] = queue_ptr;
     } else {
@@ -224,7 +226,7 @@ class CoroutineDispatcher {
     return queue_ptr;
   }
 
-  void DeRegister(CoroutineDispatcherRegisterIDType consumer_id) {
+  void DeRegister(EventLoopWakeUpHandle consumer_id) {
     std::lock_guard guard(global_addition_lock_);
     bool existed = consumer_id < kMaxInVecQueueCount_
                        ? queues_[consumer_id] != nullptr
@@ -262,8 +264,7 @@ class CoroutineDispatcher {
   }
 
  private:
-  void NotifyEventLoop(CoroutineDispatcherRegisterIDType id,
-                       std::uint64_t count) {
+  void NotifyEventLoop(EventLoopWakeUpHandle id, std::uint64_t count) {
     int wrote = write(id, &count, sizeof(count));
     if (wrote < 0) {
       throw arc::exception::IOException("Notify EventLoop Error");
@@ -272,7 +273,7 @@ class CoroutineDispatcher {
 
   template <typename It>
   bool EnqueueAllToAnyNoLock(It it, int count) {
-    CoroutineDispatcherRegisterIDType next_consumer_id = GetNextConsumer();
+    EventLoopWakeUpHandle next_consumer_id = GetNextConsumer();
     auto queue_ptr = GetCoroutineQueue(next_consumer_id);
     bool ret = queue_ptr->EnqueueBulk(it, count);
     if (ret) {
@@ -281,11 +282,11 @@ class CoroutineDispatcher {
     return ret;
   }
 
-  CoroutineDispatcherRegisterIDType GetNextConsumer() {
+  EventLoopWakeUpHandle GetNextConsumer() {
     if (consumer_ids_.empty()) {
       throw arc::exception::detail::ExceptionBase("No consumer available");
     }
-    CoroutineDispatcherRegisterIDType next_consumer_id = *consumer_id_itr_;
+    EventLoopWakeUpHandle next_consumer_id = *consumer_id_itr_;
     consumer_id_itr_++;
     if (consumer_id_itr_ == consumer_ids_.end()) {
       consumer_id_itr_ = consumer_ids_.begin();
@@ -293,13 +294,12 @@ class CoroutineDispatcher {
     return next_consumer_id;
   }
 
-  CoroutineDispatcherQueue* GetCoroutineQueue(
-      CoroutineDispatcherRegisterIDType id) {
-    if (id < kMaxInVecQueueCount_)
-      [[likely]] {
-        assert(queues_[id]);
-        return queues_[id];
-      } assert(extra_queues_[id]);
+  CoroutineQueue* GetCoroutineQueue(EventLoopWakeUpHandle id) {
+    if (id < kMaxInVecQueueCount_) [[likely]] {
+      assert(queues_[id]);
+      return queues_[id];
+    }
+    assert(extra_queues_[id]);
     return extra_queues_[id];
   }
 
@@ -309,16 +309,12 @@ class CoroutineDispatcher {
 
   constexpr static int kCoroutineQueueDefaultSize_ = 1024;
   constexpr static int kMaxInVecQueueCount_ = 512;
-  std::vector<CoroutineDispatcherQueue*> queues_;
-  std::unordered_map<CoroutineDispatcherRegisterIDType,
-                     CoroutineDispatcherQueue*>
-      extra_queues_;
+  std::vector<CoroutineQueue*> queues_;
+  std::unordered_map<EventLoopWakeUpHandle, CoroutineQueue*> extra_queues_;
 
-  std::vector<CoroutineDispatcherRegisterIDType> consumer_ids_;
-  std::vector<CoroutineDispatcherRegisterIDType>::iterator consumer_id_itr_;
+  std::vector<EventLoopWakeUpHandle> consumer_ids_;
+  std::vector<EventLoopWakeUpHandle>::iterator consumer_id_itr_;
 };
-
-CoroutineDispatcher& GetGlobalCoroutineDispatcher();
 
 }  // namespace coro
 }  // namespace arc
