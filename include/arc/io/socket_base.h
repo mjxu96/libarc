@@ -167,7 +167,8 @@ class SocketBase : public IOBase {
 
   template <net::Protocol UP = P>
   requires(UP != net::Protocol::UDP) ssize_t
-      Send(const void* data, int num, int flags = 0) {
+      Send(const void* data, int num,
+           int flags = MSG_NOSIGNAL) {  // TODO this is linux specific
     return send(this->fd_, data, num, flags);
   }
 
@@ -186,7 +187,8 @@ class SocketBase : public IOBase {
 
   template <net::Protocol UP = P>
   requires(UP != net::Protocol::UDP) ssize_t
-      Recv(char* buf, int max_recv_bytes, int flags = 0) {
+      Recv(char* buf, int max_recv_bytes,
+           int flags = MSG_NOSIGNAL) {  // TODO this is linux specific
     return recv(this->fd_, buf, max_recv_bytes, flags);
   }
 
@@ -209,8 +211,7 @@ class SocketBase : public IOBase {
     return tmp_read;
   }
 
- private:
-  void MoveFrom(SocketBase&& other) {
+ private : void MoveFrom(SocketBase&& other) {
     addr_ = std::move(other.addr_);
     is_non_blocking_ = other.is_non_blocking_;
   }

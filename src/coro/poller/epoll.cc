@@ -158,6 +158,7 @@ int Poller::WaitEvents(coro::EventBase** todo_events) {
     if (todo_cnt < kMaxEventsSizePerWait) {
       auto triggered_bound_event = PopBoundEvent(*triggered_bound_event_itr);
       if (triggered_bound_event) {
+        triggered_bound_event->SetInterrupted(true);
         todo_events[todo_cnt] = triggered_bound_event;
         todo_cnt++;
       }
@@ -443,6 +444,7 @@ EventBase* Poller::PopBoundEvent(coro::BoundEvent* event) {
       break;
     }
     case detail::BoundType::USER_EVENT: {
+      // TODO this is slow, find a way to optimize it
       for (auto itr = pending_user_events_.begin();
            itr != pending_user_events_.end(); itr++) {
         if ((*itr)->GetEventID() == event->GetBountEventID()) {

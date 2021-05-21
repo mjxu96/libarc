@@ -57,13 +57,22 @@ class EventBase {
     event_id_ = event_id;
   }
 
+  inline void SetInterrupted(bool is_interrupted) {
+    is_interrupted_ = is_interrupted;
+  }
+
   inline const int GetEventID() const {
     return event_id_;
+  }
+
+  inline const bool IsInterrupted() const {
+    return is_interrupted_;
   }
 
  protected:
   std::coroutine_handle<void> handle_{nullptr};
   int event_id_{-1};
+  bool is_interrupted_{false};
 };
 
 }  // namespace coro

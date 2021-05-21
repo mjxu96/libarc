@@ -119,6 +119,7 @@ class Socket : public detail::SocketBase<AF,
     return coro::IOAwaiter(
         std::bind(&Socket<AF, P, PP>::IOReadyFunctor<PP>, this),
         std::bind(&Socket<AF, P, PP>::SendResumeFunctor<PP>, this, data, num),
+        std::bind(&Socket<AF, P, PP>::SendResumeFunctor<PP>, this, data, num),
         this->fd_, io::IOType::WRITE, token);
   }
 
@@ -128,6 +129,7 @@ class Socket : public detail::SocketBase<AF,
       const std::chrono::steady_clock::duration& timeout) {
     return coro::IOAwaiter(
         std::bind(&Socket<AF, P, PP>::IOReadyFunctor<PP>, this),
+        std::bind(&Socket<AF, P, PP>::SendResumeFunctor<PP>, this, data, num),
         std::bind(&Socket<AF, P, PP>::SendResumeFunctor<PP>, this, data, num),
         this->fd_, io::IOType::WRITE, timeout);
   }
@@ -156,6 +158,8 @@ class Socket : public detail::SocketBase<AF,
         std::bind(&Socket<AF, P, PP>::IOReadyFunctor<PP>, this),
         std::bind(&Socket<AF, P, PP>::RecvResumeFunctor<PP>, this, buf,
                   max_recv_bytes),
+        std::bind(&Socket<AF, P, PP>::RecvResumeFunctor<PP>, this, buf,
+                  max_recv_bytes),
         this->fd_, io::IOType::READ, token);
   }
 
@@ -166,6 +170,8 @@ class Socket : public detail::SocketBase<AF,
           const std::chrono::steady_clock::duration& timeout) {
     return coro::IOAwaiter(
         std::bind(&Socket<AF, P, PP>::IOReadyFunctor<PP>, this),
+        std::bind(&Socket<AF, P, PP>::RecvResumeFunctor<PP>, this, buf,
+                  max_recv_bytes),
         std::bind(&Socket<AF, P, PP>::RecvResumeFunctor<PP>, this, buf,
                   max_recv_bytes),
         this->fd_, io::IOType::READ, timeout);

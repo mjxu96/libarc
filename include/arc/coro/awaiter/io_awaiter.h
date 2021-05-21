@@ -49,21 +49,28 @@ class [[nodiscard]] IOAwaiter {
             int fd, io::IOType io_type)
       : ready_functor_(std::forward<ReadyFunctor>(ready_functor)),
         resume_functor_(std::forward<ResumeFunctor>(resume_functor)),
+        resume_interrupted_functor_(resume_functor_),
         fd_(fd),
         io_type_(io_type) {}
 
   IOAwaiter(ReadyFunctor&& ready_functor, ResumeFunctor&& resume_functor,
-            int fd, io::IOType io_type, const CancellationToken& token)
+            ResumeFunctor&& resume_interrucpted_functor, int fd,
+            io::IOType io_type, const CancellationToken& token)
       : ready_functor_(std::forward<ReadyFunctor>(ready_functor)),
+        resume_interrupted_functor_(
+            std::forward<ResumeFunctor>(resume_interrucpted_functor)),
         resume_functor_(std::forward<ResumeFunctor>(resume_functor)),
         fd_(fd),
         io_type_(io_type),
         abort_handle_(std::make_shared<CancellationToken>(token)) {}
 
   IOAwaiter(ReadyFunctor&& ready_functor, ResumeFunctor&& resume_functor,
-            int fd, io::IOType io_type,
+            ResumeFunctor&& resume_interrucpted_functor, int fd,
+            io::IOType io_type,
             const std::chrono::steady_clock::duration& sleep_time)
       : ready_functor_(std::forward<ReadyFunctor>(ready_functor)),
+        resume_interrupted_functor_(
+            std::forward<ResumeFunctor>(resume_interrucpted_functor)),
         resume_functor_(std::forward<ResumeFunctor>(resume_functor)),
         fd_(fd),
         io_type_(io_type),
@@ -75,21 +82,24 @@ class [[nodiscard]] IOAwaiter {
   bool await_ready() { return ready_functor_(); }
 
   typename std::invoke_result_t<ResumeFunctor> await_resume() {
+    if (abort_handle_.index() != 0 && io_event_->IsInterrupted()) [[unlikely]] {
+      return resume_interrupted_functor_();
+    }
     return resume_functor_();
   }
 
   template <arc::concepts::PromiseT PromiseType>
   void await_suspend(std::coroutine_handle<PromiseType> handle) {
-    auto io_event = new coro::IOEvent(fd_, io_type_, handle);
+    io_event_ = new coro::IOEvent(fd_, io_type_, handle);
     auto event_loop = &GetLocalEventLoop();
-    event_loop->AddIOEvent(io_event);
+    event_loop->AddIOEvent(io_event_);
     if (abort_handle_.index() == 1) [[unlikely]] {
-      auto cancellation_event = new coro::CancellationEvent(io_event);
+      auto cancellation_event = new coro::CancellationEvent(io_event_);
       std::get<1>(abort_handle_)
           ->SetEventAndLoop(cancellation_event, event_loop);
     } else if (abort_handle_.index() == 2) [[unlikely]] {
       auto timeout_event =
-          new coro::TimeoutEvent(std::get<2>(abort_handle_), io_event);
+          new coro::TimeoutEvent(std::get<2>(abort_handle_), io_event_);
       event_loop->AddBoundEvent(timeout_event);
     }
   }
@@ -99,10 +109,13 @@ class [[nodiscard]] IOAwaiter {
   int fd_;
 
   ResumeFunctor resume_functor_;
+  ResumeFunctor resume_interrupted_functor_;
   ReadyFunctor ready_functor_;
 
   std::variant<std::monostate, std::shared_ptr<CancellationToken>, std::int64_t>
       abort_handle_;
+
+  IOEvent* io_event_{nullptr};
 };
 
 }  // namespace coro

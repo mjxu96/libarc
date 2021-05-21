@@ -140,8 +140,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
 
   template <Pattern UPP = PP>
   requires(UPP == Pattern::ASYNC) coro::Task<ssize_t> Recv(
-      char* buf, int max_recv_bytes, const coro::CancellationToken& tk) {
-    auto token = tk;
+      char* buf, int max_recv_bytes, const coro::CancellationToken& token) {
     while (true) {
       ssize_t ret = SSL_read(ssl_.ssl, buf, max_recv_bytes);
       if (ret <= 0) {
@@ -149,8 +148,9 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
         if (err == SSL_ERROR_WANT_READ) {
           bool is_abort = co_await coro::IOAwaiter(
               std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
-              std::bind(&TLSSocket<AF, PP>::TLSIOResumeCancellableFunctor, this,
-                        token),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeInterruptedFunctor,
+                        this),
               this->fd_, arc::io::IOType::READ, token);
           if (is_abort) {
             errno = EAGAIN;
@@ -159,8 +159,9 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
         } else if (err == SSL_ERROR_WANT_WRITE) {
           bool is_abort = co_await coro::IOAwaiter(
               std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
-              std::bind(&TLSSocket<AF, PP>::TLSIOResumeCancellableFunctor, this,
-                        token),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeInterruptedFunctor,
+                        this),
               this->fd_, arc::io::IOType::WRITE, token);
           if (is_abort) {
             errno = EAGAIN;
@@ -183,8 +184,6 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   requires(UPP == Pattern::ASYNC) coro::Task<ssize_t> Recv(
       char* buf, int max_recv_bytes,
       const std::chrono::steady_clock::duration& timeout) {
-    std::chrono::steady_clock::time_point timeout_time =
-        std::chrono::steady_clock::now() + timeout;
     while (true) {
       ssize_t ret = SSL_read(ssl_.ssl, buf, max_recv_bytes);
       if (ret <= 0) {
@@ -192,8 +191,9 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
         if (err == SSL_ERROR_WANT_READ) {
           bool is_abort = co_await coro::IOAwaiter(
               std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
-              std::bind(&TLSSocket<AF, PP>::TLSIOResumeTimeoutFunctor, this,
-                        timeout_time),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeInterruptedFunctor,
+                        this),
               this->fd_, arc::io::IOType::READ, timeout);
           if (is_abort) {
             errno = EAGAIN;
@@ -202,8 +202,9 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
         } else if (err == SSL_ERROR_WANT_WRITE) {
           bool is_abort = co_await coro::IOAwaiter(
               std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
-              std::bind(&TLSSocket<AF, PP>::TLSIOResumeTimeoutFunctor, this,
-                        timeout_time),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeInterruptedFunctor,
+                        this),
               this->fd_, arc::io::IOType::WRITE, timeout);
           if (is_abort) {
             errno = EAGAIN;
@@ -235,10 +236,6 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   template <Pattern UPP = PP>
   requires(UPP == Pattern::ASYNC) coro::Task<int> Send(const void* data,
                                                        int num) {
-    co_await coro::IOAwaiter(
-        std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
-        std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this), this->fd_,
-        arc::io::IOType::WRITE);
     int ret = -1;
     do {
       ret = SSL_write(ssl_.ssl, data, num);
@@ -264,18 +261,9 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
 
   template <Pattern UPP = PP>
   requires(UPP == Pattern::ASYNC) coro::Task<int> Send(
-      const void* data, int num, const coro::CancellationToken& tk) {
-    auto token = tk;
-    bool is_abort = co_await coro::IOAwaiter(
-        std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
-        std::bind(&TLSSocket<AF, PP>::TLSIOResumeCancellableFunctor, this,
-                  token),
-        this->fd_, arc::io::IOType::WRITE, token);
+      const void* data, int num, const coro::CancellationToken& token) {
+    bool is_abort = false;
     int ret = -1;
-    if (is_abort) {
-      errno = EAGAIN;
-      co_return ret;
-    }
     do {
       ret = SSL_write(ssl_.ssl, data, num);
       if (ret < 0) {
@@ -283,8 +271,9 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
         if (err == SSL_ERROR_WANT_READ) {
           is_abort = co_await coro::IOAwaiter(
               std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
-              std::bind(&TLSSocket<AF, PP>::TLSIOResumeCancellableFunctor, this,
-                        token),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeInterruptedFunctor,
+                        this),
               this->fd_, arc::io::IOType::READ, token);
           if (is_abort) {
             errno = EAGAIN;
@@ -293,8 +282,9 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
         } else if (err == SSL_ERROR_WANT_WRITE) {
           is_abort = co_await coro::IOAwaiter(
               std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
-              std::bind(&TLSSocket<AF, PP>::TLSIOResumeCancellableFunctor, this,
-                        token),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeInterruptedFunctor,
+                        this),
               this->fd_, arc::io::IOType::WRITE, token);
           if (is_abort) {
             errno = EAGAIN;
@@ -311,18 +301,8 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   template <Pattern UPP = PP>
   requires(UPP == Pattern::ASYNC) coro::Task<int> Send(
       const void* data, int num, std::chrono::steady_clock::duration& timeout) {
-    std::chrono::steady_clock::time_point timeout_time =
-        std::chrono::steady_clock::now() + timeout;
-    bool is_abort = co_await coro::IOAwaiter(
-        std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
-        std::bind(&TLSSocket<AF, PP>::TLSIOResumeTimeoutFunctor, this,
-                  timeout_time),
-        this->fd_, arc::io::IOType::WRITE, timeout);
+    bool is_abort = false;
     int ret = -1;
-    if (is_abort) {
-      errno = EAGAIN;
-      co_return ret;
-    }
     do {
       ret = SSL_write(ssl_.ssl, data, num);
       if (ret < 0) {
@@ -330,8 +310,9 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
         if (err == SSL_ERROR_WANT_READ) {
           is_abort = co_await coro::IOAwaiter(
               std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
-              std::bind(&TLSSocket<AF, PP>::TLSIOResumeTimeoutFunctor, this,
-                        timeout_time),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeInterruptedFunctor,
+                        this),
               this->fd_, arc::io::IOType::READ, timeout);
           if (is_abort) {
             errno = EAGAIN;
@@ -340,8 +321,9 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
         } else if (err == SSL_ERROR_WANT_WRITE) {
           is_abort = co_await coro::IOAwaiter(
               std::bind(&TLSSocket<AF, PP>::TLSIOReadyFunctor, this),
-              std::bind(&TLSSocket<AF, PP>::TLSIOResumeTimeoutFunctor, this,
-                        timeout_time),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
+              std::bind(&TLSSocket<AF, PP>::TLSIOResumeInterruptedFunctor,
+                        this),
               this->fd_, arc::io::IOType::WRITE, timeout);
           if (is_abort) {
             errno = EAGAIN;
@@ -455,15 +437,9 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   int HandShake() { return SSL_do_handshake(ssl_.ssl); }
 
   bool TLSIOReadyFunctor() { return false; }
-  void TLSIOResumeFunctor() { return; }
+  bool TLSIOResumeFunctor() { return false; }
 
-  bool TLSIOResumeCancellableFunctor(coro::CancellationToken token) {
-    return token.IsCancelled();
-  }
-  bool TLSIOResumeTimeoutFunctor(
-      std::chrono::steady_clock::time_point timeout_time) {
-    return std::chrono::steady_clock::now() > timeout_time;
-  }
+  bool TLSIOResumeInterruptedFunctor() { return true; }
 
  protected:
   void BindFdWithSSL() { SSL_set_fd(ssl_.ssl, this->fd_); }

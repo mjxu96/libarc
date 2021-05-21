@@ -92,6 +92,7 @@ Task<void> HandleClient(
       }
     }
     // std::cout << received << std::endl;
+    // std::cout << connection_alive << std::endl;
     if (connection_alive) {
       co_await sock.Send(ret.c_str(), ret.size());
     }
@@ -113,8 +114,8 @@ Task<void> HandleClient(TLSSocket<Domain::IPV4, Pattern::ASYNC> sock) {
   int recv = 0;
   while (connection_alive) {
     while (true) {
-      recv = co_await sock.Recv(data.get(), 1024, std::chrono::seconds(2));
-      // recv = co_await sock.Recv(data.get(), 1024);
+      // recv = co_await sock.Recv(data.get(), 1024, std::chrono::seconds(2));
+      recv = co_await sock.Recv(data.get(), 1024);
       if (recv >= 0) {
         received.append(data.get(), recv);
       }
@@ -148,7 +149,7 @@ Task<void> Listen() {
   while (i < 2) {
     auto in_sock = co_await accpetor.Accept();
     arc::coro::EnsureFuture(HandleClient(std::move(in_sock)));
-    i++;
+    // i++;
     std::cout << "thread: 0x" << std::hex << std::this_thread::get_id()
               << std::dec << " handled " << i << " clients" << std::endl;
   }
@@ -278,11 +279,11 @@ int main(int argc, char** argv) {
   // for (int i = 0; i < thread_num; i++) {
   //   threads[i].join();
   // }
-  DispatchHttpStart(thread_num);
+  // DispatchHttpStart(thread_num);
 
   // std::cout << "finished" << std::endl;
   // StartEventLoop(Connect());
   // StartEventLoop(TLSConnect());
-  // StartEventLoop(Listen());
+  StartEventLoop(Listen());
   // StartEventLoop(TLSAccept());
 }
