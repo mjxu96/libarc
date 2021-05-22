@@ -1,7 +1,7 @@
 /*
- * File: event_base.h
+ * File: executor.h
  * Project: libarc
- * File Created: Monday, 7th December 2020 10:26:45 pm
+ * File Created: Saturday, 22nd May 2021 1:16:16 pm
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
@@ -26,58 +26,27 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef LIBARC__CORO__EVENTS__EVENT_BASE_H
-#define LIBARC__CORO__EVENTS__EVENT_BASE_H
+#ifndef LIBARC__CORO__UTILS_EXECUTOR_H
+#define LIBARC__CORO__UTILS_EXECUTOR_H
 
-#include <unistd.h>
-#include <cassert>
-#ifdef __clang__
-#include <experimental/coroutine>
-namespace std {
-using experimental::coroutine_handle;
-}
-#else
-#include <coroutine>
-#endif
+#include <arc/coro/awaiter/executor_awaiter.h>
 
 namespace arc {
 namespace coro {
 
-using EventID = int;
-
-class EventBase {
+class Executor {
  public:
-  EventBase(std::coroutine_handle<void> handle) : handle_(handle) {}
-  virtual ~EventBase() {}
+  Executor() = default;
 
-  virtual void Resume() {
-    assert(!handle_.done());
-    handle_.resume();
+  template <typename Functor, typename... Args>
+  ExecutorAwaiter<Functor, Args...> Execute(Functor&& functor,
+                                                    Args&&... args) {
+    return ExecutorAwaiter<Functor, Args...>(
+        std::forward<Functor>(functor), std::forward<Args>(args)...);
   }
-
-  inline void SetEventID(EventID event_id) {
-    event_id_ = event_id;
-  }
-
-  inline void SetInterrupted(bool is_interrupted) {
-    is_interrupted_ = is_interrupted;
-  }
-
-  inline const EventID GetEventID() const {
-    return event_id_;
-  }
-
-  inline const bool IsInterrupted() const {
-    return is_interrupted_;
-  }
-
- protected:
-  std::coroutine_handle<void> handle_{nullptr};
-  EventID event_id_{-1};
-  bool is_interrupted_{false};
 };
 
 }  // namespace coro
 }  // namespace arc
 
-#endif /* LIBARC__CORO__EVENTS__EVENT_BASE_H */
+#endif

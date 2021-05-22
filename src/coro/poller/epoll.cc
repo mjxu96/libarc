@@ -49,6 +49,7 @@ Poller::Poller() {
 }
 
 Poller::~Poller() {
+  std::lock_guard guard(poller_lock_);
   if (user_event_fd_ >= 0) {
     close(user_event_fd_);
   }
@@ -140,6 +141,7 @@ int Poller::WaitEvents(coro::EventBase** todo_events) {
         todo_events[todo_cnt] = *triggered_event_itr;
         self_triggered_event_ids_[todo_cnt] =
             todo_events[todo_cnt]->GetEventID();
+        user_events_.erase(todo_events[todo_cnt]->GetEventID());
         todo_cnt++;
         triggered_event_itr = triggered_user_events_.erase(triggered_event_itr);
       } else {
@@ -219,6 +221,7 @@ void Poller::AddUserEvent(coro::UserEvent* event) {
   event->SetEventID(max_event_id_.fetch_add(1, std::memory_order::relaxed));
   pending_user_events_.push_back(event);
   event->SetIterator(std::prev(pending_user_events_.end()));
+  user_events_.insert({event->GetEventID(), event});
 }
 
 void Poller::AddBoundEvent(coro::BoundEvent* event) {
@@ -350,19 +353,41 @@ void Poller::TrimTimeEvents() {
       std::max((std::int64_t)0, top_event->GetWakeupTime() - current_time);
 }
 
-void Poller::TriggerUserEvent(coro::UserEvent* event) {
+bool Poller::TriggerUserEvent(EventID event_id) {
   std::lock_guard guard(poller_lock_);
+  auto event_itr = user_events_.find(event_id);
+  if (event_itr == user_events_.end()) [[unlikely]] {
+    return false;
+  }
+  auto event = event_itr->second;
   pending_user_events_.erase(event->GetIterator());
   triggered_user_events_.push_back(event);
+
+  // trigger self
+  std::uint64_t i = 1;
+  if (write(user_event_fd_, &i, sizeof(i)) < 0) {
+    throw arc::exception::IOException("Trigger User Event Error");
+  }
+  return true;
 }
 
-void Poller::TriggerBoundEvent(int bound_event_id, coro::BoundEvent* event) {
+void Poller::TriggerBoundEvent(EventID bound_event_id,
+                               coro::BoundEvent* event) {
   std::lock_guard guard(poller_lock_);
-  if (event_pending_bound_token_map_.find(bound_event_id) !=
+  auto event_pending_bound_token_map_itr =
+      event_pending_bound_token_map_.find(bound_event_id);
+  if (event_pending_bound_token_map_itr ==
       event_pending_bound_token_map_.end()) {
-    pending_bound_events_.erase(event->GetIterator());
-    triggered_bound_events_.push_back(event);
-    event_pending_bound_token_map_.erase(bound_event_id);
+    return;
+  }
+  pending_bound_events_.erase(event->GetIterator());
+  triggered_bound_events_.push_back(event);
+  event_pending_bound_token_map_.erase(event_pending_bound_token_map_itr);
+
+  // trigger self
+  std::uint64_t i = 1;
+  if (write(user_event_fd_, &i, sizeof(i)) < 0) {
+    throw arc::exception::IOException("Trigger Bound Event Error");
   }
 }
 
@@ -450,6 +475,7 @@ EventBase* Poller::PopBoundEvent(coro::BoundEvent* event) {
         if ((*itr)->GetEventID() == event->GetBountEventID()) {
           assert(event->GetBoundEvent() == *itr);
           pending_user_events_.erase(itr);
+          user_events_.erase(event->GetBountEventID());
           return event->GetBoundEvent();
         }
       }
@@ -470,7 +496,7 @@ EventBase* Poller::PopBoundEvent(coro::BoundEvent* event) {
 
 void Poller::RemoveBoundEvent(int count) {
   for (int i = 0; i < count && !event_pending_bound_token_map_.empty(); i++) {
-    int event_id = self_triggered_event_ids_[i];
+    EventID event_id = self_triggered_event_ids_[i];
     if (event_pending_bound_token_map_.find(event_id) !=
         event_pending_bound_token_map_.end()) {
       auto itr = event_pending_bound_token_map_[event_id];
@@ -481,7 +507,7 @@ void Poller::RemoveBoundEvent(int count) {
         static_cast<TimeoutEvent*>(bound_event)->SetValidity(false);
         continue;
       }
-      delete *itr;
+      delete bound_event;
     }
   }
 }

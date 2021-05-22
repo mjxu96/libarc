@@ -81,7 +81,7 @@ class EventLoop {
   }
 
   inline void AddUserEvent(coro::UserEvent* event) {
-    poller_->AddUserEvent(event);
+    return poller_->AddUserEvent(event);
   }
 
   inline void AddBoundEvent(coro::BoundEvent* event) {
@@ -94,8 +94,8 @@ class EventLoop {
     return poller_->GetEventHandle();
   }
 
-  inline void TriggerUserEvent(coro::UserEvent* event) {
-    return poller_->TriggerUserEvent(event);
+  inline bool TriggerUserEvent(EventID event_id) {
+    return poller_->TriggerUserEvent(event_id);
   }
 
   inline void TriggerBoundEvent(int bind_event_id, coro::BoundEvent* event) {

@@ -27,12 +27,17 @@ set(ARC_LOGGING_FILES
   ${LIBARC_SOURCE_DIR}/src/logging/logging.cc
 )
 
+set(ARC_UTILS_FILES
+  ${LIBARC_SOURCE_DIR}/src/utils/thread_pool.cc
+)
+
 add_library(arc
   ${LIBARC_SOURCE_DIR}/src/arc.cc
   ${ARC_CORO_FILES}
   ${ARC_IO_FILES}
   ${ARC_EXCEPTION_FILES}
   ${ARC_LOGGING_FILES}
+  ${ARC_UTILS_FILES}
 )
 
 target_link_libraries(arc

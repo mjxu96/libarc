@@ -1,7 +1,7 @@
 /*
- * File: event_base.h
+ * File: executor_awaiter.h
  * Project: libarc
- * File Created: Monday, 7th December 2020 10:26:45 pm
+ * File Created: Saturday, 22nd May 2021 1:19:12 pm
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
@@ -26,58 +26,48 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef LIBARC__CORO__EVENTS__EVENT_BASE_H
-#define LIBARC__CORO__EVENTS__EVENT_BASE_H
+#ifndef LIBARC__CORO__AWAITER__EXECUTOR_AWAITER_H
+#define LIBARC__CORO__AWAITER__EXECUTOR_AWAITER_H
 
-#include <unistd.h>
-#include <cassert>
-#ifdef __clang__
-#include <experimental/coroutine>
-namespace std {
-using experimental::coroutine_handle;
-}
-#else
-#include <coroutine>
-#endif
+#include <arc/concept/coro.h>
+#include <arc/coro/eventloop.h>
+#include <arc/coro/events/user_event.h>
+#include <arc/utils/thread_pool.h>
+
+#include <functional>
 
 namespace arc {
 namespace coro {
 
-using EventID = int;
-
-class EventBase {
+template <typename Functor, typename... Args>
+class ExecutorAwaiter {
  public:
-  EventBase(std::coroutine_handle<void> handle) : handle_(handle) {}
-  virtual ~EventBase() {}
+  using RetType = typename std::result_of<Functor(Args...)>::type;
+  ExecutorAwaiter(Functor&& functor, Args&&... args)
+      : functor_(std::bind(std::forward<Functor>(functor),
+                           std::forward<Args>(args)...)) {}
 
-  virtual void Resume() {
-    assert(!handle_.done());
-    handle_.resume();
+  bool await_ready() { return false; }
+
+  template <arc::concepts::PromiseT PromiseType>
+  void await_suspend(std::coroutine_handle<PromiseType> handle) {
+    UserEvent* event = new UserEvent(handle);
+    EventLoop* loop = &GetLocalEventLoop();
+    loop->AddUserEvent(event);
+    future_ = utils::ThreadPool::GetInstance().Enqueue(loop, event, functor_);
   }
 
-  inline void SetEventID(EventID event_id) {
-    event_id_ = event_id;
+  RetType await_resume() {
+    assert(future_.wait_for(std::chrono::seconds(0)) == std::future_status::ready);
+    return future_.get();
   }
 
-  inline void SetInterrupted(bool is_interrupted) {
-    is_interrupted_ = is_interrupted;
-  }
-
-  inline const EventID GetEventID() const {
-    return event_id_;
-  }
-
-  inline const bool IsInterrupted() const {
-    return is_interrupted_;
-  }
-
- protected:
-  std::coroutine_handle<void> handle_{nullptr};
-  EventID event_id_{-1};
-  bool is_interrupted_{false};
+ private:
+  std::function<RetType()> functor_;
+  std::future<RetType> future_;
 };
 
 }  // namespace coro
 }  // namespace arc
 
-#endif /* LIBARC__CORO__EVENTS__EVENT_BASE_H */
+#endif

@@ -81,7 +81,7 @@ class BoundEvent : virtual public EventBase {
   
   inline const detail::TriggerType GetTriggerType() const { return trigger_type_; }
 
-  inline const int GetBountEventID() const { return bound_event_id_; }
+  inline const EventID GetBountEventID() const { return bound_event_id_; }
 
   inline const std::int64_t GetBoundHelper() const { return bound_helper_; }
 
@@ -91,7 +91,7 @@ class BoundEvent : virtual public EventBase {
   inline const std::list<BoundEvent*>::iterator& GetIterator() const { return event_itr_; }
 
  private:
-  int bound_event_id_;
+  EventID bound_event_id_;
   std::int64_t bound_helper_;
   EventBase* bound_event_;
   detail::TriggerType trigger_type_;

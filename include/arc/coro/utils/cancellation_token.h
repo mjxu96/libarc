@@ -33,6 +33,7 @@
 #include <arc/coro/events/cancellation_event.h>
 
 #include <memory>
+#include <tuple>
 
 namespace arc {
 namespace coro {
@@ -44,67 +45,48 @@ class CancellationTokenCore {
   CancellationTokenCore() {}
 
   ~CancellationTokenCore() {
-    std::lock_guard guard(lock_);
-    if (event_) {
-      TriggerCancel();
-    }
+    // TODO add global event loop group
+    // Cancel();
   }
 
   void SetEventAndLoop(BoundEvent* event, EventLoop* loop) {
     std::lock_guard guard(lock_);
-    event_ = event;
-    bind_event_id_ = event->GetBountEventID();
-    loop_ = loop;
-    loop_->AddBoundEvent(event);
+    registered_events_pairs_.push_back({event->GetBountEventID(), event, loop});
+    loop->AddBoundEvent(event);
   }
 
   void Cancel() {
     std::lock_guard guard(lock_);
-    if (!event_) {
-      return;
-    }
-    if (TriggerCancel() < sizeof(std::uint64_t)) {
-      throw arc::exception::IOException("Cancel token write error");
-    }
-    event_ = nullptr;
-  }
-
-  bool IsCancelled() {
-    std::lock_guard guard(lock_);
-    return !event_;
+    TriggerCancel();
+    registered_events_pairs_.clear();
   }
 
  private:
-  int TriggerCancel() {
-    loop_->TriggerBoundEvent(bind_event_id_, event_);
-    std::uint64_t event_read = 1;
-    return write(loop_->GetEventHandle(), &event_read, sizeof(event_read));
+  void TriggerCancel() {
+    for (auto [bind_event_id, event, loop] : registered_events_pairs_) {
+      loop->TriggerBoundEvent(bind_event_id, event);
+    }
   }
 
   std::mutex lock_;
-  BoundEvent* event_{nullptr};
-  int bind_event_id_{-1};
-  EventLoop* loop_{nullptr};
+
+  // vector of {bound_event_id, trigger_event_pair}
+  std::vector<std::tuple<EventID, BoundEvent*, EventLoop*>>
+      registered_events_pairs_;
 };
 
 }  // namespace detail
 
 class CancellationToken {
  public:
-  CancellationToken() : core_(std::make_shared<detail::CancellationTokenCore>()) {}
+  CancellationToken()
+      : core_(std::make_shared<detail::CancellationTokenCore>()) {}
 
   void SetEventAndLoop(BoundEvent* event, EventLoop* loop) {
     core_->SetEventAndLoop(event, loop);
   }
 
-  // const bool IsValid() const { return core_ != nullptr; }
-
-  void Cancel() { 
-    core_->Cancel(); }
-
-  bool IsCancelled() {
-    return core_->IsCancelled();
-  }
+  void Cancel() { core_->Cancel(); }
 
  private:
   std::shared_ptr<detail::CancellationTokenCore> core_{nullptr};

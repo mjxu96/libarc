@@ -27,9 +27,12 @@
  */
 
 #include "test_coro.h"
+#include "test_coro_cancel.h"
 #include "test_coro_dispatcher.h"
+#include "test_coro_executor.h"
 #include "test_coro_lock.h"
 #include "test_coro_socket.h"
+#include "test_coro_timeout.h"
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

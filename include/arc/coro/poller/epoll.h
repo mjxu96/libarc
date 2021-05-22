@@ -83,8 +83,8 @@ class Poller : public io::detail::IOBase {
   }
 
   inline int GetEventHandle() const { return user_event_fd_; }
-  void TriggerUserEvent(coro::UserEvent* event);
-  void TriggerBoundEvent(int bound_event_id,
+  bool TriggerUserEvent(EventID event_id);
+  void TriggerBoundEvent(EventID bound_event_id,
                                 coro::BoundEvent* event);
 
   int Register();
@@ -97,7 +97,7 @@ class Poller : public io::detail::IOBase {
 
   int next_wait_timeout_ = -1;
 
-  std::atomic<std::uint64_t> max_event_id_{0};
+  std::atomic<EventID> max_event_id_{0};
 
   // io events
   int total_io_events_{0};
@@ -123,13 +123,14 @@ class Poller : public io::detail::IOBase {
   std::mutex poller_lock_;
   std::list<coro::UserEvent*> pending_user_events_;
   std::list<coro::UserEvent*> triggered_user_events_;
+  std::unordered_map<EventID, coro::UserEvent*> user_events_;
 
   // cancellation events
   std::list<coro::BoundEvent*> pending_bound_events_;
   std::list<coro::BoundEvent*> triggered_bound_events_;
-  std::unordered_map<std::uint64_t, std::list<coro::BoundEvent*>::iterator>
+  std::unordered_map<EventID, std::list<coro::BoundEvent*>::iterator>
       event_pending_bound_token_map_;
-  int self_triggered_event_ids_[kMaxEventsSizePerWait] = {0};
+  EventID self_triggered_event_ids_[kMaxEventsSizePerWait] = {0};
 
   // coro dispatcher related
   bool is_dispatcher_registered_{false};
