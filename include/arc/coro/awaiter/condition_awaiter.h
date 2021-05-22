@@ -50,20 +50,22 @@ class ConditionCore {
   void Register(ConditionEvent* event, EventLoop* event_loop) {
     std::lock_guard guard(lock_);
     event_loop->AddUserEvent(event);
-    EventIDEventLoopPair pair = {.event_id = event->GetEventID(),
-                                 .event_loop = event_loop};
-    pending_events_.push(pair);
-    if (pending_events_pairs_.find(event_loop) == pending_events_pairs_.end()) {
-      pending_events_pairs_[event_loop] = std::unordered_set<EventID>();
+    EventID event_id = event->GetEventID();
+    EventLoopID event_loop_id = event_loop->GetEventLoopID();
+    pending_events_.push({event_id, event_loop_id});
+    if (pending_events_pairs_.find(event_loop_id) ==
+        pending_events_pairs_.end()) {
+      pending_events_pairs_[event_loop_id] = std::unordered_set<EventID>();
     }
-    pending_events_pairs_[event_loop].insert(event->GetEventID());
+    pending_events_pairs_[event_loop_id].insert(event_id);
   }
 
   void DeRegister(ConditionEvent* event, EventLoop* event_loop) {
     EventID event_id = event->GetEventID();
-    pending_events_pairs_[event_loop].erase(event_id);
-    if (pending_events_pairs_[event_loop].empty()) {
-      pending_events_pairs_.erase(event_loop);
+    EventLoopID event_loop_id = event_loop->GetEventLoopID();
+    pending_events_pairs_[event_loop_id].erase(event_id);
+    if (pending_events_pairs_[event_loop_id].empty()) {
+      pending_events_pairs_.erase(event_loop_id);
     }
   }
 
@@ -88,33 +90,37 @@ class ConditionCore {
       auto pending_event_pair = pending_events_.front();
       pending_events_.pop();
       auto pending_events_pairs_itr =
-          pending_events_pairs_.find(pending_event_pair.event_loop);
+          pending_events_pairs_.find(pending_event_pair.second);
       if (pending_events_pairs_itr == pending_events_pairs_.end()) {
         continue;
       }
       auto event_id_itr =
-          pending_events_pairs_itr->second.find(pending_event_pair.event_id);
+          pending_events_pairs_itr->second.find(pending_event_pair.first);
       if (event_id_itr == pending_events_pairs_itr->second.end()) {
         continue;
       }
-      EventID event_id = pending_event_pair.event_id;
-      EventLoop* loop = pending_event_pair.event_loop;
+      EventID event_id = pending_event_pair.first;
+      EventLoopID event_loop_id = pending_event_pair.second;
       pending_events_pairs_itr->second.erase(event_id_itr);
       if (pending_events_pairs_itr->second.empty()) {
         pending_events_pairs_.erase(pending_events_pairs_itr);
       }
-      if (!loop->TriggerUserEvent(event_id)) {
-        continue;
+      {
+        std::lock_guard guard(
+            EventLoopGroup::GetInstance().EventLoopGroupLock());
+        auto loop =
+            EventLoopGroup::GetInstance().GetEventLoopNoLock(event_loop_id);
+        if (!loop || !loop->TriggerUserEvent(event_id)) {
+          continue;
+        }
       }
       break;
     }
   }
 
   std::mutex lock_;
-  std::queue<EventIDEventLoopPair> pending_events_;
-  // TODO will cause double free if directly use EventIDEventLoopPair
-  // investigate it
-  std::unordered_map<EventLoop*, std::unordered_set<EventID>>
+  std::queue<std::pair<EventID, EventLoopID>> pending_events_;
+  std::unordered_map<EventLoopID, std::unordered_set<EventID>>
       pending_events_pairs_;
 };
 
@@ -148,7 +154,7 @@ class [[nodiscard]] ConditionAwaiter {
   template <arc::concepts::PromiseT PromiseType>
   void await_suspend(std::coroutine_handle<PromiseType> handle) {
     condition_event_ = new coro::ConditionEvent(handle);
-    event_loop_ = &GetLocalEventLoop();
+    event_loop_ = &EventLoop::GetLocalInstance();
     core_->Register(condition_event_, event_loop_);
     if (abort_handle_.index() == 1) {
       auto cancellation_event = new coro::CancellationEvent(condition_event_);

@@ -50,7 +50,7 @@ class [[nodiscard]] TimeAwaiter {
 
   template <arc::concepts::PromiseT PromiseType>
   void await_suspend(std::coroutine_handle<PromiseType> handle) {
-    GetLocalEventLoop().AddTimeEvent(
+    EventLoop::GetLocalInstance().AddTimeEvent(
         new coro::TimeEvent(next_wakeup_time_, handle));
   }
 

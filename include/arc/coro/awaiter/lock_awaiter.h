@@ -28,22 +28,13 @@
 #ifndef LIBARC__CORO__AWAITER__LOCK_AWAITER_H
 #define LIBARC__CORO__AWAITER__LOCK_AWAITER_H
 
-#include <arc/coro/eventloop.h>
+#include <arc/coro/eventloop_group.h>
 #include <arc/coro/events/lock_event.h>
 
 namespace arc {
 namespace coro {
 
 namespace detail {
-
-struct EventIDEventLoopPair {
-  EventID event_id;
-  EventLoop* event_loop{nullptr};
-
-  bool operator==(const EventIDEventLoopPair& other) const {
-    return event_id == other.event_id && event_loop == other.event_loop;
-  }
-};
 
 class LockCore {
  public:
@@ -57,18 +48,22 @@ class LockCore {
       return;
     }
     auto& next_event_pair = pending_event_pairs_.front();
-    bool success =
-        next_event_pair.event_loop->TriggerUserEvent(next_event_pair.event_id);
-    assert(success);
+    {
+      std::lock_guard guard(EventLoopGroup::GetInstance().EventLoopGroupLock());
+      auto event_loop =
+          EventLoopGroup::GetInstance().GetEventLoopNoLock(next_event_pair.second);
+      // this loop must be valid
+      bool success = event_loop->TriggerUserEvent(next_event_pair.first);
+      assert(success);
+    }
     pending_event_pairs_.pop();
     is_locked_ = true;
   }
 
   void AddPendingEventPair(coro::LockEvent* event, EventLoop* event_loop) {
     event_loop->AddUserEvent(event);
-    EventIDEventLoopPair pair = {.event_id = event->GetEventID(),
-                                 .event_loop = event_loop};
-    pending_event_pairs_.push(pair);
+    pending_event_pairs_.push(
+        {event->GetEventID(), event_loop->GetEventLoopID()});
   }
 
   inline void CoreLock() { lock_.lock(); }
@@ -85,7 +80,7 @@ class LockCore {
 
  private:
   std::mutex lock_;
-  std::queue<EventIDEventLoopPair> pending_event_pairs_{};
+  std::queue<std::pair<EventID, EventLoopID>> pending_event_pairs_{};
   bool is_locked_{false};
 };
 
@@ -94,7 +89,7 @@ class LockCore {
 class [[nodiscard]] LockAwaiter {
  public:
   LockAwaiter(detail::LockCore* core)
-      : core_(core), event_handle_(GetLocalEventLoop().GetEventHandle()) {}
+      : core_(core), event_handle_(EventLoop::GetLocalInstance().GetEventHandle()) {}
   bool await_ready() {
     core_->CoreLock();
     if (core_->TryLock()) {
@@ -107,7 +102,7 @@ class [[nodiscard]] LockAwaiter {
   template <arc::concepts::PromiseT PromiseType>
   void await_suspend(std::coroutine_handle<PromiseType> handle) {
     core_->AddPendingEventPair(new coro::LockEvent(handle),
-                               &GetLocalEventLoop());
+                               &EventLoop::GetLocalInstance());
     core_->CoreUnlock();
   }
 

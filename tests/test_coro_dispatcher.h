@@ -56,7 +56,7 @@ class DispatcherCoroTest : public ::testing::Test {
 
   coro::Task<void> LongRunTask(int producer_count) {
     co_await lock_.Acquire();
-    coro::GetLocalEventLoop().ResigerConsumer();
+    coro::EventLoop::GetLocalInstance().ResigerConsumer();
     prepared_consumer_count_++;
     consumer_prepare_cond_.NotifyAll();
     lock_.Release();
@@ -65,13 +65,13 @@ class DispatcherCoroTest : public ::testing::Test {
     while (finished_produce_count_ < producer_count) {
       co_await cond_.Wait(lock_);
     }
-    coro::GetLocalEventLoop().DeResigerConsumer();
+    coro::EventLoop::GetLocalInstance().DeResigerConsumer();
     lock_.Release();
   }
 
   coro::Task<void> ProduceTask(int produce_count, int consumer_count,
                                coro::EventLoopWakeUpHandle target) {
-    coro::GetLocalEventLoop().ResigerProducer();
+    coro::EventLoop::GetLocalInstance().ResigerProducer();
     co_await lock_.Acquire();
     while (prepared_consumer_count_ < consumer_count) {
       co_await consumer_prepare_cond_.Wait(lock_);
@@ -79,14 +79,14 @@ class DispatcherCoroTest : public ::testing::Test {
     lock_.Release();
     for (int i = 0; i < produce_count; i++) {
       if (target == -1) {
-        coro::GetLocalEventLoop().Dispatch(DispatchedTask());
+        coro::EventLoop::GetLocalInstance().Dispatch(DispatchedTask());
         // yield temporarily to avoid dispatch all tasks to one
         co_await coro::Yield();
       } else {
-        coro::GetLocalEventLoop().DispatchTo(DispatchedTask(), target);
+        coro::EventLoop::GetLocalInstance().DispatchTo(DispatchedTask(), target);
       }
     }
-    coro::GetLocalEventLoop().DeResigerProducer();
+    coro::EventLoop::GetLocalInstance().DeResigerProducer();
     co_await lock_.Acquire();
     finished_produce_count_++;
     cond_.NotifyAll();

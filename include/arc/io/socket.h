@@ -88,7 +88,7 @@ class Socket : public detail::SocketBase<AF,
 
   virtual ~Socket() {
     if (this->fd_ > 0) {
-      coro::GetLocalEventLoop().RemoveAllIOEvents(this->fd_);
+      coro::EventLoop::GetLocalInstance().RemoveAllIOEvents(this->fd_);
     }
   }
 

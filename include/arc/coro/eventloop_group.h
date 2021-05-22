@@ -1,7 +1,7 @@
 /*
- * File: executor_awaiter.h
+ * File: eventloop_group.h
  * Project: libarc
- * File Created: Saturday, 22nd May 2021 1:19:12 pm
+ * File Created: Saturday, 22nd May 2021 7:35:50 pm
  * Author: Minjun Xu (mjxu96@outlook.com)
  * -----
  * MIT License
@@ -26,45 +26,57 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef LIBARC__CORO__AWAITER__EXECUTOR_AWAITER_H
-#define LIBARC__CORO__AWAITER__EXECUTOR_AWAITER_H
+#ifndef LIBARC__CORO__EVENTLOOP_GROUP_H
+#define LIBARC__CORO__EVENTLOOP_GROUP_H
 
-#include <arc/concept/coro.h>
-#include <arc/coro/eventloop.h>
-#include <arc/coro/events/user_event.h>
-#include <arc/utils/thread_pool.h>
-
-#include <functional>
+#include "eventloop.h"
 
 namespace arc {
 namespace coro {
 
-template <typename Functor, typename... Args>
-class ExecutorAwaiter {
+
+class EventLoopGroup {
  public:
-  using RetType = typename std::result_of<Functor(Args...)>::type;
-  ExecutorAwaiter(Functor&& functor, Args&&... args)
-      : functor_(std::bind(std::forward<Functor>(functor),
-                           std::forward<Args>(args)...)) {}
-
-  bool await_ready() { return false; }
-
-  template <arc::concepts::PromiseT PromiseType>
-  void await_suspend(std::coroutine_handle<PromiseType> handle) {
-    UserEvent* event = new UserEvent(handle);
-    EventLoop* loop = &EventLoop::GetLocalInstance();
-    loop->AddUserEvent(event);
-    future_ = utils::ThreadPool::GetInstance().Enqueue(loop, event, functor_);
+  static EventLoopGroup& GetInstance() {
+    static EventLoopGroup group;
+    return group;
   }
 
-  RetType await_resume() {
-    assert(future_.wait_for(std::chrono::seconds(0)) == std::future_status::ready);
-    return future_.get();
+  EventLoopID RegisterEventLoop(EventLoop* loop) {
+    std::lock_guard guard(lock_);
+    loops_.insert({max_id_, loop});
+    max_id_++;
+    return max_id_ - 1;
+  }
+
+  void DeRegisterEventLoop(EventLoopID id) {
+    std::lock_guard guard(lock_);
+    loops_.erase(id);
+  }
+
+  EventLoop* GetEventLoop(EventLoopID id) {
+    std::lock_guard guard(lock_);
+    return GetEventLoopNoLock(id);
+  }
+
+  EventLoop* GetEventLoopNoLock(EventLoopID id) {
+    auto event_loop_itr = loops_.find(id);
+    if (event_loop_itr == loops_.end()) {
+      return nullptr;
+    }
+    return event_loop_itr->second;
+  }
+
+  std::mutex& EventLoopGroupLock() {
+    return lock_;
   }
 
  private:
-  std::function<RetType()> functor_;
-  std::future<RetType> future_;
+  EventLoopGroup() = default;
+
+  std::mutex lock_;
+  EventLoopID max_id_{0};
+  std::unordered_map<EventLoopID, EventLoop*> loops_;
 };
 
 }  // namespace coro

@@ -114,7 +114,7 @@ class TaskPromise : public PromiseBase {
 
   void unhandled_exception() {
     if (need_manual_clean_) {
-      GetLocalEventLoop().AddToCleanUpCoroutine(
+      EventLoop::GetLocalInstance().AddToCleanUpCoroutine(
           std::coroutine_handle<TaskPromise<T>>::from_promise(*this));
     }
     return_type_ = ReturnType::EXCEPTION;
@@ -132,7 +132,7 @@ class TaskPromise : public PromiseBase {
       return;
     }
     if (need_manual_clean_) {
-      GetLocalEventLoop().AddToCleanUpCoroutine(
+      EventLoop::GetLocalInstance().AddToCleanUpCoroutine(
           std::coroutine_handle<TaskPromise<T>>::from_promise(*this));
     }
     // new placement to initialize the value_ in union
@@ -178,7 +178,7 @@ class TaskPromise<void> : public PromiseBase {
 
   void unhandled_exception() {
     if (need_manual_clean_) {
-      GetLocalEventLoop().AddToCleanUpCoroutine(
+      EventLoop::GetLocalInstance().AddToCleanUpCoroutine(
           std::coroutine_handle<TaskPromise<void>>::from_promise(*this));
     }
     return_type_ = ReturnType::EXCEPTION;
@@ -192,7 +192,7 @@ class TaskPromise<void> : public PromiseBase {
 
   void return_void() {
     if (need_manual_clean_) {
-      GetLocalEventLoop().AddToCleanUpCoroutine(
+      EventLoop::GetLocalInstance().AddToCleanUpCoroutine(
           std::coroutine_handle<TaskPromise<void>>::from_promise(*this));
     }
     if (return_type_ == ReturnType::EXCEPTION) {

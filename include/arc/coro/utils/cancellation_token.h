@@ -29,7 +29,7 @@
 #ifndef LIBARC__CORO__UTILS_CANCELLATION_TOKEN_H
 #define LIBARC__CORO__UTILS_CANCELLATION_TOKEN_H
 
-#include <arc/coro/eventloop.h>
+#include <arc/coro/eventloop_group.h>
 #include <arc/coro/events/cancellation_event.h>
 
 #include <memory>
@@ -44,14 +44,12 @@ class CancellationTokenCore {
  public:
   CancellationTokenCore() {}
 
-  ~CancellationTokenCore() {
-    // TODO add global event loop group
-    // Cancel();
-  }
+  ~CancellationTokenCore() { Cancel(); }
 
   void SetEventAndLoop(BoundEvent* event, EventLoop* loop) {
     std::lock_guard guard(lock_);
-    registered_events_pairs_.push_back({event->GetBountEventID(), event, loop});
+    registered_events_pairs_.push_back(
+        {event->GetBountEventID(), event, loop->GetEventLoopID()});
     loop->AddBoundEvent(event);
   }
 
@@ -63,15 +61,21 @@ class CancellationTokenCore {
 
  private:
   void TriggerCancel() {
-    for (auto [bind_event_id, event, loop] : registered_events_pairs_) {
-      loop->TriggerBoundEvent(bind_event_id, event);
+    std::lock_guard guard(EventLoopGroup::GetInstance().EventLoopGroupLock());
+    for (auto [bind_event_id, event, event_loop_id] :
+         registered_events_pairs_) {
+      auto loop =
+          EventLoopGroup::GetInstance().GetEventLoopNoLock(event_loop_id);
+      if (loop) {
+        loop->TriggerBoundEvent(bind_event_id, event);
+      }
     }
   }
 
   std::mutex lock_;
 
   // vector of {bound_event_id, trigger_event_pair}
-  std::vector<std::tuple<EventID, BoundEvent*, EventLoop*>>
+  std::vector<std::tuple<EventID, BoundEvent*, EventLoopID>>
       registered_events_pairs_;
 };
 

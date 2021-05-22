@@ -56,6 +56,8 @@ using experimental::coroutine_handle;
 namespace arc {
 namespace coro {
 
+using EventLoopID = int;
+
 enum class EventLoopType {
   NONE = 0U,
   PRODUCER = 1U,
@@ -63,16 +65,19 @@ enum class EventLoopType {
 };
 
 template <arc::concepts::CopyableMoveableOrVoid T>
-class[[nodiscard]] Task;
+class [[nodiscard]] Task;
 
 class EventLoop {
  public:
-  EventLoop();
   ~EventLoop();
 
   bool IsDone();
   void InitDo();
   void Do();
+
+  static EventLoop& GetLocalInstance();
+
+  inline EventLoopID GetEventLoopID() { return id_; }
 
   inline void AddIOEvent(coro::IOEvent* event) { poller_->AddIOEvent(event); }
 
@@ -106,8 +111,7 @@ class EventLoop {
   void CleanUpFinishedCoroutines();
 
   void Dispatch(Task<void>&& task);
-  void DispatchTo(Task<void>&& task,
-                  EventLoopWakeUpHandle event_loop_id);
+  void DispatchTo(Task<void>&& task, EventLoopWakeUpHandle event_loop_id);
 
   void ResigerConsumer();
   void DeResigerConsumer();
@@ -115,9 +119,12 @@ class EventLoop {
   void DeResigerProducer();
 
  private:
+  EventLoop();
   void Trim();
 
   Poller* poller_{nullptr};
+
+  EventLoopID id_{-1};
 
   bool is_running_{false};
 
@@ -131,8 +138,7 @@ class EventLoop {
 
   // dispatched events
   std::list<std::coroutine_handle<>> to_randomly_dispatched_coroutines_{};
-  std::unordered_map<EventLoopWakeUpHandle,
-                     std::list<std::coroutine_handle<>>>
+  std::unordered_map<EventLoopWakeUpHandle, std::list<std::coroutine_handle<>>>
       to_dispatched_coroutines_with_dests_{};
   int to_dispatched_coroutines_count_{0};
   EventLoopWakeUpHandle register_id_{-1};
@@ -142,8 +148,6 @@ class EventLoop {
   void ConsumeCoroutine();
   void ProduceCoroutine();
 };
-
-EventLoop& GetLocalEventLoop();
 
 }  // namespace coro
 }  // namespace arc

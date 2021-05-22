@@ -27,6 +27,7 @@
  */
 
 #include <arc/coro/eventloop.h>
+#include <arc/coro/eventloop_group.h>
 #include <arc/coro/task.h>
 #include <arc/exception/io.h>
 
@@ -46,11 +47,15 @@ inline EventLoopType operator~(EventLoopType a) {
   return static_cast<EventLoopType>(~static_cast<int>(a));
 }
 
-EventLoop::EventLoop() { poller_ = new Poller(); }
+EventLoop::EventLoop() {
+  poller_ = new Poller();
+  id_ = EventLoopGroup::GetInstance().RegisterEventLoop(this);
+}
 
 EventLoop::~EventLoop() {
   DeResigerProducer();
   DeResigerConsumer();
+  EventLoopGroup::GetInstance().DeRegisterEventLoop(id_);
   delete poller_;
 }
 
@@ -77,6 +82,11 @@ void EventLoop::Do() {
   }
 
   Trim();
+}
+
+EventLoop& EventLoop::GetLocalInstance() {
+  thread_local EventLoop loop;
+  return loop;
 }
 
 void EventLoop::AddToCleanUpCoroutine(std::coroutine_handle<> handle) {
@@ -219,9 +229,4 @@ void EventLoop::ProduceCoroutine() {
   }
 
   return;
-}
-
-arc::coro::EventLoop& arc::coro::GetLocalEventLoop() {
-  thread_local EventLoop loop{};
-  return loop;
 }

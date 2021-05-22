@@ -42,7 +42,7 @@ class CancelCoroTest : public ::testing::Test {
   float max_allowed_ref_error_ = 0.05;
   coro::Condition cond_;
   coro::CancellationToken token_;
-  int self_cancel_time_milliseconds_ = 500;
+  int self_cancel_time_milliseconds_ = 1000;
   int self_released_time_milliseconds_ = self_cancel_time_milliseconds_ * 2;
 
   virtual void SetUp() override {

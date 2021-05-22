@@ -89,7 +89,7 @@ class ThreadPool {
       if (stop_) throw std::runtime_error("enqueue on stopped ThreadPool");
 
       tasks_.emplace([task]() { (*task)(); });
-      task_events_.push({loop, event});
+      task_events_.push({loop->GetEventLoopID(), event});
     }
     condition_.notify_one();
     return res;
@@ -106,7 +106,7 @@ class ThreadPool {
   std::vector<std::thread> workers_;
   // the task queue
   std::queue<std::function<void()>> tasks_;
-  std::queue<std::pair<coro::EventLoop*, coro::UserEvent*>> task_events_;
+  std::queue<std::pair<coro::EventLoopID, coro::UserEvent*>> task_events_;
 
   // synchronization
   std::mutex queue_mutex_;

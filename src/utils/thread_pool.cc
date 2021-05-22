@@ -48,7 +48,7 @@
  * IN THE SOFTWARE.
  */
 
-#include <arc/coro/eventloop.h>
+#include <arc/coro/eventloop_group.h>
 #include <arc/utils/thread_pool.h>
 
 using namespace arc::utils;
@@ -59,7 +59,7 @@ ThreadPool::ThreadPool(size_t threads) : stop_(false) {
     workers_.emplace_back([this] {
       for (;;) {
         std::function<void()> task;
-        std::pair<coro::EventLoop*, coro::UserEvent*> task_event;
+        std::pair<coro::EventLoopID, coro::UserEvent*> task_event;
 
         {
           std::unique_lock<std::mutex> lock(this->queue_mutex_);
@@ -72,12 +72,13 @@ ThreadPool::ThreadPool(size_t threads) : stop_(false) {
           this->task_events_.pop();
         }
         task();
-        task_event.first->TriggerUserEvent(task_event.second->GetEventID());
-        // std::uint64_t i = 1;
-        // if (write(task_event.first->GetEventHandle(), &i, sizeof(i)) < 0) {
-        //   throw arc::exception::IOException(
-        //       "Trigger User Event when a Blocking Executor Finishes Error");
-        // }
+        {
+          std::lock_guard guard(coro::EventLoopGroup::GetInstance().EventLoopGroupLock());
+          auto loop = coro::EventLoopGroup::GetInstance().GetEventLoopNoLock(task_event.first);
+          if (loop) {
+            loop->TriggerUserEvent(task_event.second->GetEventID());
+          }
+        }
       }
     });
 }

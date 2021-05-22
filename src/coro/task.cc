@@ -33,7 +33,7 @@ using namespace arc::coro;
 void arc::coro::EnsureFuture(Task<void>&& task) { task.Start(true); }
 
 void arc::coro::RunUntilComplete() {
-  auto& event_loop = GetLocalEventLoop();
+  auto& event_loop = EventLoop::GetLocalInstance();
   event_loop.InitDo();
   while (!event_loop.IsDone()) {
     event_loop.Do();

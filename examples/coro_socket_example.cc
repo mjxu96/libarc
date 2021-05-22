@@ -55,7 +55,7 @@ Task<void> LongTimeJob() {
 }
 
 void StartLongTimeJob() {
-  GetLocalEventLoop().ResigerConsumer();
+  EventLoop::GetLocalInstance().ResigerConsumer();
   std::cout << "registered self as consumer" << std::endl;
   // StartEventLoop(LongTimeJob());
   RunUntilComplete();
@@ -101,7 +101,7 @@ Task<void> HandleClient(
 
 
   // co_await SleepFor(std::chrono::seconds(1));
-  // GetLocalEventLoop().DeResigerConsumer();
+  // EventLoop::GetLocalInstance().DeResigerConsumer();
 }
 
 Task<void> HandleClient(TLSSocket<Domain::IPV4, Pattern::ASYNC> sock) {
@@ -236,7 +236,7 @@ Task<void> DispatchAccept(int thread_num) {
   accpetor.Listen();
   std::cout << "http listen starts at " << port << std::endl;
   int i = 0;
-  arc::coro::GetLocalEventLoop().ResigerProducer();
+  arc::coro::EventLoop::GetLocalInstance().ResigerProducer();
   std::vector<std::thread> threads;
   for (int i = 0; i < thread_num; i++) {
     threads.emplace_back(StartLongTimeJob);
@@ -247,13 +247,13 @@ Task<void> DispatchAccept(int thread_num) {
   while (i < 4000) {
     auto in_sock = co_await accpetor.Accept();
     std::cout << "accepted client " << i << std::endl;
-    arc::coro::GetLocalEventLoop().Dispatch(HandleClient(std::move(in_sock)));
-    // arc::coro::GetLocalEventLoop().DispatchTo(HandleClient(std::move(in_sock)),
+    arc::coro::EventLoop::GetLocalInstance().Dispatch(HandleClient(std::move(in_sock)));
+    // arc::coro::EventLoop::GetLocalInstance().DispatchTo(HandleClient(std::move(in_sock)),
     // consumer_id);
     i++;
   }
   // co_await SleepFor(std::chrono::seconds(1));
-  // arc::coro::GetLocalEventLoop().DeResigerProducer();
+  // arc::coro::EventLoop::GetLocalInstance().DeResigerProducer();
   for (int i = 0; i < thread_num; i++) {
     threads[i].join();
   }
