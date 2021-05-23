@@ -141,6 +141,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   template <Pattern UPP = PP>
   requires(UPP == Pattern::ASYNC) coro::Task<ssize_t> Recv(
       char* buf, int max_recv_bytes, const coro::CancellationToken& token) {
+    auto token_copy = token;
     while (true) {
       ssize_t ret = SSL_read(ssl_.ssl, buf, max_recv_bytes);
       if (ret <= 0) {
@@ -151,7 +152,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
               std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
               std::bind(&TLSSocket<AF, PP>::TLSIOResumeInterruptedFunctor,
                         this),
-              this->fd_, arc::io::IOType::READ, token);
+              this->fd_, arc::io::IOType::READ, token_copy);
           if (is_abort) {
             errno = EAGAIN;
             co_return -1;
@@ -162,7 +163,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
               std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
               std::bind(&TLSSocket<AF, PP>::TLSIOResumeInterruptedFunctor,
                         this),
-              this->fd_, arc::io::IOType::WRITE, token);
+              this->fd_, arc::io::IOType::WRITE, token_copy);
           if (is_abort) {
             errno = EAGAIN;
             co_return -1;
@@ -184,6 +185,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   requires(UPP == Pattern::ASYNC) coro::Task<ssize_t> Recv(
       char* buf, int max_recv_bytes,
       const std::chrono::steady_clock::duration& timeout) {
+    auto timeout_copy = timeout;
     while (true) {
       ssize_t ret = SSL_read(ssl_.ssl, buf, max_recv_bytes);
       if (ret <= 0) {
@@ -194,7 +196,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
               std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
               std::bind(&TLSSocket<AF, PP>::TLSIOResumeInterruptedFunctor,
                         this),
-              this->fd_, arc::io::IOType::READ, timeout);
+              this->fd_, arc::io::IOType::READ, timeout_copy);
           if (is_abort) {
             errno = EAGAIN;
             co_return -1;
@@ -205,7 +207,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
               std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
               std::bind(&TLSSocket<AF, PP>::TLSIOResumeInterruptedFunctor,
                         this),
-              this->fd_, arc::io::IOType::WRITE, timeout);
+              this->fd_, arc::io::IOType::WRITE, timeout_copy);
           if (is_abort) {
             errno = EAGAIN;
             co_return -1;
@@ -262,6 +264,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   template <Pattern UPP = PP>
   requires(UPP == Pattern::ASYNC) coro::Task<int> Send(
       const void* data, int num, const coro::CancellationToken& token) {
+    auto token_copy = token;
     bool is_abort = false;
     int ret = -1;
     do {
@@ -274,7 +277,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
               std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
               std::bind(&TLSSocket<AF, PP>::TLSIOResumeInterruptedFunctor,
                         this),
-              this->fd_, arc::io::IOType::READ, token);
+              this->fd_, arc::io::IOType::READ, token_copy);
           if (is_abort) {
             errno = EAGAIN;
             co_return -1;
@@ -285,7 +288,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
               std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
               std::bind(&TLSSocket<AF, PP>::TLSIOResumeInterruptedFunctor,
                         this),
-              this->fd_, arc::io::IOType::WRITE, token);
+              this->fd_, arc::io::IOType::WRITE, token_copy);
           if (is_abort) {
             errno = EAGAIN;
             co_return -1;
@@ -300,7 +303,9 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
 
   template <Pattern UPP = PP>
   requires(UPP == Pattern::ASYNC) coro::Task<int> Send(
-      const void* data, int num, std::chrono::steady_clock::duration& timeout) {
+      const void* data, int num,
+      const std::chrono::steady_clock::duration& timeout) {
+    auto timeout_copy = timeout;
     bool is_abort = false;
     int ret = -1;
     do {
@@ -313,7 +318,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
               std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
               std::bind(&TLSSocket<AF, PP>::TLSIOResumeInterruptedFunctor,
                         this),
-              this->fd_, arc::io::IOType::READ, timeout);
+              this->fd_, arc::io::IOType::READ, timeout_copy);
           if (is_abort) {
             errno = EAGAIN;
             co_return -1;
@@ -324,7 +329,7 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
               std::bind(&TLSSocket<AF, PP>::TLSIOResumeFunctor, this),
               std::bind(&TLSSocket<AF, PP>::TLSIOResumeInterruptedFunctor,
                         this),
-              this->fd_, arc::io::IOType::WRITE, timeout);
+              this->fd_, arc::io::IOType::WRITE, timeout_copy);
           if (is_abort) {
             errno = EAGAIN;
             co_return -1;
