@@ -95,7 +95,7 @@ class EventLoop {
 
   inline void RemoveAllIOEvents(int fd) { poller_->RemoveAllIOEvents(fd); }
 
-  inline coro::EventHandleType GetEventHandle() const {
+  inline coro::EventLoopWakeUpHandle GetEventHandle() const {
     return poller_->GetEventHandle();
   }
 

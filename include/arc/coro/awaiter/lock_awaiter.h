@@ -110,7 +110,7 @@ class [[nodiscard]] LockAwaiter {
 
  private:
   detail::LockCore* core_{nullptr};
-  arc::coro::EventHandleType event_handle_{-1};
+  arc::coro::EventLoopWakeUpHandle event_handle_{-1};
 };
 
 }  // namespace coro

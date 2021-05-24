@@ -35,10 +35,6 @@
 namespace arc {
 namespace coro {
 
-#ifdef __linux__
-using EventHandleType = int;
-#endif
-
 class UserEvent : virtual public EventBase {
  public:
   UserEvent(std::coroutine_handle<void> handle)
