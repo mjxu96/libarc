@@ -142,6 +142,15 @@ class TaskPromise : public PromiseBase {
   }
 
   template <typename U = T>
+  requires(arc::concepts::Movable<U>) U&& Result() {
+    if (this->return_type_ == ReturnType::EXCEPTION) {
+      std::rethrow_exception(this->exception_ptr_);
+    }
+    assert(this->return_type_ == ReturnType::VALUE);
+    return std::move(this->value_);
+  }
+
+  template <typename U = T>
   requires(!arc::concepts::Movable<U>) U& Result() {
     if (this->return_type_ == ReturnType::EXCEPTION) {
       std::rethrow_exception(this->exception_ptr_);
@@ -150,14 +159,6 @@ class TaskPromise : public PromiseBase {
     return this->value_;
   }
 
-  template <typename U = T>
-  requires(arc::concepts::Movable<U>) U&& Result() {
-    if (this->return_type_ == ReturnType::EXCEPTION) {
-      std::rethrow_exception(this->exception_ptr_);
-    }
-    assert(this->return_type_ == ReturnType::VALUE);
-    return std::move(this->value_);
-  }
 
  private:
   union {
@@ -172,7 +173,7 @@ class TaskPromise<void> : public PromiseBase {
   TaskPromise() = default;
   ~TaskPromise() {
     if (return_type_ == ReturnType::EXCEPTION) {
-      exception_ptr_.~exception_ptr();
+      // exception_ptr_.~exception_ptr();
     }
   }
 
@@ -264,7 +265,12 @@ class [[nodiscard]] Task {
     coroutine_.promise().SetContinuation(continuation);
     return coroutine_;
   }
-  T await_resume() { return coroutine_.promise().Result(); }
+
+  template<typename U=T> requires (!std::is_void_v<U>)
+  U&& await_resume() { return coroutine_.promise().Result(); }
+
+  template<typename U=T> requires (std::is_void_v<U>)
+  U await_resume() { return coroutine_.promise().Result(); }
 
  private:
   std::coroutine_handle<promise_type> coroutine_{nullptr};

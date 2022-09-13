@@ -88,7 +88,7 @@ Task<void> TestEmptyCoro() {
     std::cerr << e.what() << '\n';
   }
 
-  // throw std::logic_error("som");
+  throw std::logic_error("som");
 
   co_return;
 }
