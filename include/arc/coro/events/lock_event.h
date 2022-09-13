@@ -40,7 +40,8 @@ namespace coro {
 
 class LockEvent : public UserEvent {
  public:
-  LockEvent(std::coroutine_handle<void> handle) : UserEvent(handle), EventBase(handle) {}
+  LockEvent(std::coroutine_handle<void> handle)
+      : UserEvent(handle), EventBase(handle) {}
   virtual ~LockEvent() = default;
 };
 }  // namespace coro

@@ -72,8 +72,7 @@ class Condition {
     co_await ConditionAwaiter(core_, nullptr, timeout);
   }
 
-  ~Condition() {
-    delete core_; }
+  ~Condition() { delete core_; }
 
   // Condition cannot be copied nor moved.
   Condition(const Condition&) = delete;
@@ -82,7 +81,6 @@ class Condition {
   Condition& operator=(Condition&&) = delete;
 
  private:
-
   arc::coro::detail::ConditionCore* core_{nullptr};
 };
 

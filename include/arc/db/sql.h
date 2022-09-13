@@ -46,19 +46,21 @@ class SQLResult {
  public:
   SQLResult() = default;
   virtual ~SQLResult() = default;
-  virtual coro::Task<void> FetchNextRow(std::shared_ptr<SQLResultRow> row_ptr) = 0;
+  virtual coro::Task<void> FetchNextRow(
+      std::shared_ptr<SQLResultRow> row_ptr) = 0;
   virtual int GetColumnCount() = 0;
 };
 
-template<typename SQLResultType>
+template <typename SQLResultType>
 class SQLConnection {
  public:
   SQLConnection(SQLType sql_type) : sql_type_(sql_type) {}
   virtual ~SQLConnection() = default;
 
   virtual coro::Task<void> Connect(const std::string& host, std::uint16_t port,
-                  const std::string& user, const std::string& pwd,
-                  const std::string& db) = 0;
+                                   const std::string& user,
+                                   const std::string& pwd,
+                                   const std::string& db) = 0;
   virtual coro::Task<SQLResultType> Run(const std::string& command) = 0;
   virtual coro::Task<void> Close() = 0;
 

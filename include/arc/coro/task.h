@@ -142,7 +142,8 @@ class TaskPromise : public PromiseBase {
   }
 
   template <typename U = T>
-  requires(arc::concepts::Movable<U>) U&& Result() {
+    requires(arc::concepts::Movable<U>)
+  U&& Result() {
     if (this->return_type_ == ReturnType::EXCEPTION) {
       std::rethrow_exception(this->exception_ptr_);
     }
@@ -151,14 +152,14 @@ class TaskPromise : public PromiseBase {
   }
 
   template <typename U = T>
-  requires(!arc::concepts::Movable<U>) U& Result() {
+    requires(!arc::concepts::Movable<U>)
+  U& Result() {
     if (this->return_type_ == ReturnType::EXCEPTION) {
       std::rethrow_exception(this->exception_ptr_);
     }
     assert(this->return_type_ == ReturnType::VALUE);
     return this->value_;
   }
-
 
  private:
   union {
@@ -218,11 +219,11 @@ class [[nodiscard]] Task {
  public:
   using promise_type = TaskPromise<T>;
 
-  Task(promise_type * promise)
+  Task(promise_type* promise)
       : coroutine_(
             std::coroutine_handle<promise_type>::from_promise(*promise)) {}
 
-  Task(Task && other) : coroutine_(other.coroutine_) {
+  Task(Task&& other) : coroutine_(other.coroutine_) {
     other.coroutine_ = nullptr;
   }
 
@@ -266,11 +267,17 @@ class [[nodiscard]] Task {
     return coroutine_;
   }
 
-  template<typename U=T> requires (!std::is_void_v<U>)
-  U&& await_resume() { return coroutine_.promise().Result(); }
+  template <typename U = T>
+    requires(!std::is_void_v<U>)
+  U&& await_resume() {
+    return coroutine_.promise().Result();
+  }
 
-  template<typename U=T> requires (std::is_void_v<U>)
-  U await_resume() { return coroutine_.promise().Result(); }
+  template <typename U = T>
+    requires(std::is_void_v<U>)
+  U await_resume() {
+    return coroutine_.promise().Result();
+  }
 
  private:
   std::coroutine_handle<promise_type> coroutine_{nullptr};

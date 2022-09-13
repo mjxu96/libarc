@@ -93,19 +93,20 @@ class Socket : public detail::SocketBase<AF,
   }
 
   template <net::Protocol UP = P, Pattern UPP = PP>
-  requires(UP == net::Protocol::TCP) && (UPP == Pattern::SYNC) ssize_t
-      Send(const void* data, int num) {
+    requires(UP == net::Protocol::TCP) && (UPP == Pattern::SYNC)
+  ssize_t Send(const void* data, int num) {
     return ParentType::template Send<UP>(data, num);
   }
 
   template <net::Protocol UP = P, Pattern UPP = PP, concepts::Writable DataType>
-  requires(UP == net::Protocol::TCP) && (UPP == Pattern::SYNC) ssize_t
-      Send(DataType&& data) {
+    requires(UP == net::Protocol::TCP) && (UPP == Pattern::SYNC)
+  ssize_t Send(DataType&& data) {
     return ParentType::template Send<UP>(data.c_str(), data.size());
   }
 
   template <Pattern UP = PP>
-  requires(UP == Pattern::ASYNC) auto Send(const void* data, int num) {
+    requires(UP == Pattern::ASYNC)
+  auto Send(const void* data, int num) {
     return coro::IOAwaiter(
         std::bind(&Socket<AF, P, PP>::IOReadyFunctor<PP>, this),
         std::bind(&Socket<AF, P, PP>::SendResumeFunctor<PP>, this, data, num),
@@ -113,9 +114,8 @@ class Socket : public detail::SocketBase<AF,
   }
 
   template <Pattern UP = PP>
-  requires(UP ==
-           Pattern::ASYNC) auto Send(const void* data, int num,
-                                     const coro::CancellationToken& token) {
+    requires(UP == Pattern::ASYNC)
+  auto Send(const void* data, int num, const coro::CancellationToken& token) {
     return coro::IOAwaiter(
         std::bind(&Socket<AF, P, PP>::IOReadyFunctor<PP>, this),
         std::bind(&Socket<AF, P, PP>::SendResumeFunctor<PP>, this, data, num),
@@ -124,9 +124,9 @@ class Socket : public detail::SocketBase<AF,
   }
 
   template <Pattern UP = PP>
-  requires(UP == Pattern::ASYNC) auto Send(
-      const void* data, int num,
-      const std::chrono::steady_clock::duration& timeout) {
+    requires(UP == Pattern::ASYNC)
+  auto Send(const void* data, int num,
+            const std::chrono::steady_clock::duration& timeout) {
     return coro::IOAwaiter(
         std::bind(&Socket<AF, P, PP>::IOReadyFunctor<PP>, this),
         std::bind(&Socket<AF, P, PP>::SendResumeFunctor<PP>, this, data, num),
@@ -135,14 +135,14 @@ class Socket : public detail::SocketBase<AF,
   }
 
   template <net::Protocol UP = P, Pattern UPP = PP>
-  requires(UP == net::Protocol::TCP) && (UPP == Pattern::SYNC) ssize_t
-      Recv(char* buf, int max_recv_bytes = -1) {
+    requires(UP == net::Protocol::TCP) && (UPP == Pattern::SYNC)
+  ssize_t Recv(char* buf, int max_recv_bytes = -1) {
     return ParentType::template Recv<UP>(buf, max_recv_bytes);
   }
 
   template <net::Protocol UP = P, Pattern UPP = PP>
-  requires(UP == net::Protocol::TCP) &&
-      (UPP == Pattern::ASYNC) auto Recv(char* buf, int max_recv_bytes) {
+    requires(UP == net::Protocol::TCP) && (UPP == Pattern::ASYNC)
+  auto Recv(char* buf, int max_recv_bytes) {
     return coro::IOAwaiter(
         std::bind(&Socket<AF, P, PP>::IOReadyFunctor<PP>, this),
         std::bind(&Socket<AF, P, PP>::RecvResumeFunctor<PP>, this, buf,
@@ -151,9 +151,9 @@ class Socket : public detail::SocketBase<AF,
   }
 
   template <net::Protocol UP = P, Pattern UPP = PP>
-  requires(UP == net::Protocol::TCP) &&
-      (UPP == Pattern::ASYNC) auto Recv(char* buf, int max_recv_bytes,
-                                        const coro::CancellationToken& token) {
+    requires(UP == net::Protocol::TCP) && (UPP == Pattern::ASYNC)
+  auto Recv(char* buf, int max_recv_bytes,
+            const coro::CancellationToken& token) {
     return coro::IOAwaiter(
         std::bind(&Socket<AF, P, PP>::IOReadyFunctor<PP>, this),
         std::bind(&Socket<AF, P, PP>::RecvResumeFunctor<PP>, this, buf,
@@ -164,10 +164,9 @@ class Socket : public detail::SocketBase<AF,
   }
 
   template <net::Protocol UP = P, Pattern UPP = PP>
-  requires(UP == net::Protocol::TCP) &&
-      (UPP == Pattern::ASYNC) auto Recv(
-          char* buf, int max_recv_bytes,
-          const std::chrono::steady_clock::duration& timeout) {
+    requires(UP == net::Protocol::TCP) && (UPP == Pattern::ASYNC)
+  auto Recv(char* buf, int max_recv_bytes,
+            const std::chrono::steady_clock::duration& timeout) {
     return coro::IOAwaiter(
         std::bind(&Socket<AF, P, PP>::IOReadyFunctor<PP>, this),
         std::bind(&Socket<AF, P, PP>::RecvResumeFunctor<PP>, this, buf,
@@ -178,8 +177,8 @@ class Socket : public detail::SocketBase<AF,
   }
 
   template <net::Protocol UP = P, Pattern UPP = PP>
-  requires(UP == net::Protocol::TCP) &&
-      (UPP == Pattern::SYNC) void Connect(const net::Address<AF>& addr) {
+    requires(UP == net::Protocol::TCP) && (UPP == Pattern::SYNC)
+  void Connect(const net::Address<AF>& addr) {
     int res = connect(this->fd_, addr.GetCStyleAddress(), addr.AddressSize());
     if (res < 0) {
       throw arc::exception::IOException("Connection error");
@@ -187,8 +186,8 @@ class Socket : public detail::SocketBase<AF,
   }
 
   template <net::Protocol UP = P, Pattern UPP = PP>
-  requires(UP == net::Protocol::TCP) &&
-      (UPP == Pattern::ASYNC) auto Connect(const net::Address<AF>& addr) {
+    requires(UP == net::Protocol::TCP) && (UPP == Pattern::ASYNC)
+  auto Connect(const net::Address<AF>& addr) {
     return coro::IOAwaiter(
         std::bind(&Socket<AF, P, PP>::ConnectReadyFunctor<PP>, this, addr),
         std::bind(&Socket<AF, P, PP>::ConnectResumeFunctor<PP>, this),
@@ -198,25 +197,27 @@ class Socket : public detail::SocketBase<AF,
   // UDP
   // TODO add coroutine functions
   template <net::Protocol UP = P, Pattern UPP = PP>
-  requires(UP == net::Protocol::UDP) &&
-      (UPP == Pattern::SYNC) int SendTo(const void* data, int num,
-                                        const net::Address<AF>& addr) {
+    requires(UP == net::Protocol::UDP) && (UPP == Pattern::SYNC)
+  int SendTo(const void* data, int num, const net::Address<AF>& addr) {
     return ParentType::SendTo<AF>(data, num, &addr);
   }
 
   template <net::Protocol UP = P, Pattern UPP = PP>
-  requires(UP == net::Protocol::UDP) && (UPP == Pattern::SYNC) ssize_t
-      RecvFrom(char* buf, int max_recv_bytes, net::Address<AF>& addr) {
+    requires(UP == net::Protocol::UDP) && (UPP == Pattern::SYNC)
+  ssize_t RecvFrom(char* buf, int max_recv_bytes, net::Address<AF>& addr) {
     return ParentType::RecvFrom<AF>(buf, max_recv_bytes, &addr);
   }
 
  protected:
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::ASYNC) bool IOReadyFunctor() { return false; }
+    requires(UPP == Pattern::ASYNC) bool
+  IOReadyFunctor() {
+    return false;
+  }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::ASYNC) bool ConnectReadyFunctor(
-      const net::Address<AF>& addr) {
+    requires(UPP == Pattern::ASYNC) bool
+  ConnectReadyFunctor(const net::Address<AF>& addr) {
     int res = connect(this->fd_, addr.GetCStyleAddress(), addr.AddressSize());
     if (res < 0) {
       if (errno == EINPROGRESS) {
@@ -228,18 +229,21 @@ class Socket : public detail::SocketBase<AF,
   }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::ASYNC) ssize_t
-      SendResumeFunctor(const void* buf, int num) {
+    requires(UPP == Pattern::ASYNC)
+  ssize_t SendResumeFunctor(const void* buf, int num) {
     return ParentType::template Send<P>(buf, num);
   }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::ASYNC) ssize_t
-      RecvResumeFunctor(char* buf, int num) {
+    requires(UPP == Pattern::ASYNC)
+  ssize_t RecvResumeFunctor(char* buf, int num) {
     return ParentType::template Recv<P>(buf, num);
   }
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::ASYNC) void ConnectResumeFunctor() { return; }
+    requires(UPP == Pattern::ASYNC)
+  void ConnectResumeFunctor() {
+    return;
+  }
 };
 
 template <net::Domain AF = net::Domain::IPV4, Pattern PP = Pattern::SYNC>
@@ -261,7 +265,8 @@ class Acceptor : virtual public Socket<AF, net::Protocol::TCP, PP> {
   }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::SYNC) Socket<AF, net::Protocol::TCP, PP> Accept() {
+    requires(UPP == Pattern::SYNC)
+  Socket<AF, net::Protocol::TCP, PP> Accept() {
     typename detail::SocketBase<AF, net::SocketType::STREAM,
                                 net::Protocol::TCP>::CAddressType in_addr;
     socklen_t addrlen = sizeof(in_addr);
@@ -274,7 +279,8 @@ class Acceptor : virtual public Socket<AF, net::Protocol::TCP, PP> {
   }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::ASYNC) auto Accept() {
+    requires(UPP == Pattern::ASYNC)
+  auto Accept() {
     return coro::IOAwaiter(
         std::bind(&Acceptor<AF, UPP>::template IOReadyFunctor<UPP>, this),
         std::bind(&Acceptor<AF, UPP>::template GetNextAvailableSocket<UPP>,
@@ -284,13 +290,14 @@ class Acceptor : virtual public Socket<AF, net::Protocol::TCP, PP> {
 
  protected:
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::ASYNC) bool IOReadyFunctor() {
+    requires(UPP == Pattern::ASYNC) bool
+  IOReadyFunctor() {
     return !accepted_sockets_.empty();
   }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::ASYNC)
-      Socket<AF, net::Protocol::TCP, UPP> GetNextAvailableSocket() {
+    requires(UPP == Pattern::ASYNC)
+  Socket<AF, net::Protocol::TCP, UPP> GetNextAvailableSocket() {
     if (!accepted_sockets_.empty()) {
       Socket<AF, net::Protocol::TCP, UPP> next_socket =
           std::move(accepted_sockets_.front());

@@ -37,23 +37,22 @@ using namespace arc::db;
 
 static std::mutex mysql_connection_lock;
 
-
-  const unsigned int MySQLResult::GetColumnCount() const {
-    if (res_) {
-      return mysql_num_fields(res_);
-    }
-    return mysql_field_count(&(conn_->mysql_));
+const unsigned int MySQLResult::GetColumnCount() const {
+  if (res_) {
+    return mysql_num_fields(res_);
   }
+  return mysql_field_count(&(conn_->mysql_));
+}
 
-  arc::coro::Task<MySQLResultRow> MySQLResult::FetchNextRow() {
-    MySQLResultRow row;
-    int status = mysql_fetch_row_start(&(row.row_), res_);
-    while (status) {
-      status = co_await conn_->WaitForMySQL(status);
-      status = mysql_fetch_row_cont(&(row.row_), res_, status);
-    }
-    co_return row;
+arc::coro::Task<MySQLResultRow> MySQLResult::FetchNextRow() {
+  MySQLResultRow row;
+  int status = mysql_fetch_row_start(&(row.row_), res_);
+  while (status) {
+    status = co_await conn_->WaitForMySQL(status);
+    status = mysql_fetch_row_cont(&(row.row_), res_, status);
   }
+  co_return row;
+}
 
 MySQLConnection::MySQLConnection() : SQLConnection(SQLType::TYPE_MYSQL) {
   mysql_connection_lock.lock();

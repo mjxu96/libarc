@@ -73,8 +73,10 @@ ThreadPool::ThreadPool(size_t threads) : stop_(false) {
         }
         task();
         {
-          std::lock_guard guard(coro::EventLoopGroup::GetInstance().EventLoopGroupLock());
-          auto loop = coro::EventLoopGroup::GetInstance().GetEventLoopNoLock(task_event.first);
+          std::lock_guard guard(
+              coro::EventLoopGroup::GetInstance().EventLoopGroupLock());
+          auto loop = coro::EventLoopGroup::GetInstance().GetEventLoopNoLock(
+              task_event.first);
           if (loop) {
             loop->TriggerUserEvent(task_event.second->GetEventID());
           }

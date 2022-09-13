@@ -50,8 +50,8 @@ class LockCore {
     auto& next_event_pair = pending_event_pairs_.front();
     {
       std::lock_guard guard(EventLoopGroup::GetInstance().EventLoopGroupLock());
-      auto event_loop =
-          EventLoopGroup::GetInstance().GetEventLoopNoLock(next_event_pair.second);
+      auto event_loop = EventLoopGroup::GetInstance().GetEventLoopNoLock(
+          next_event_pair.second);
       // this loop must be valid
       bool success = event_loop->TriggerUserEvent(next_event_pair.first);
       assert(success);
@@ -89,7 +89,8 @@ class LockCore {
 class [[nodiscard]] LockAwaiter {
  public:
   LockAwaiter(detail::LockCore* core)
-      : core_(core), event_handle_(EventLoop::GetLocalInstance().GetEventHandle()) {}
+      : core_(core),
+        event_handle_(EventLoop::GetLocalInstance().GetEventHandle()) {}
   bool await_ready() {
     core_->CoreLock();
     if (core_->TryLock()) {

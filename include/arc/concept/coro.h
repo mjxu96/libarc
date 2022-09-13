@@ -42,9 +42,9 @@ concept CopyableMoveableOrVoid =
 
 template <typename T>
 concept PromiseT = requires(T t) {
-  {t.initial_suspend()};
-  {t.final_suspend()};
-};
+                     { t.initial_suspend() };
+                     { t.final_suspend() };
+                   };
 
 template <typename T>
 concept Movable =

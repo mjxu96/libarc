@@ -58,7 +58,8 @@ class ExecutorAwaiter {
   }
 
   RetType await_resume() {
-    assert(future_.wait_for(std::chrono::seconds(0)) == std::future_status::ready);
+    assert(future_.wait_for(std::chrono::seconds(0)) ==
+           std::future_status::ready);
     return future_.get();
   }
 

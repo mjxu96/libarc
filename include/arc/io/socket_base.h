@@ -166,41 +166,42 @@ class SocketBase : public IOBase {
   bool is_bound_{false};
 
   template <net::Protocol UP = P>
-  requires(UP != net::Protocol::UDP) ssize_t
-      Send(const void* data, int num,
-           int flags = MSG_NOSIGNAL) {  // TODO this is linux specific
+    requires(UP != net::Protocol::UDP)
+  ssize_t Send(const void* data, int num,
+               int flags = MSG_NOSIGNAL) {  // TODO this is linux specific
     return send(this->fd_, data, num, flags);
   }
 
   template <net::Protocol UP = P>
-  requires(UP != net::Protocol::UDP) ssize_t Write(const void* data, int num) {
+    requires(UP != net::Protocol::UDP)
+  ssize_t Write(const void* data, int num) {
     return Send<UP>(data, num);
   }
 
   template <net::Domain UAF, net::Protocol UP = P>
-  requires(UP == net::Protocol::UDP) ssize_t
-      SendTo(const void* data, int num, const net::Address<UAF>* addr) {
+    requires(UP == net::Protocol::UDP)
+  ssize_t SendTo(const void* data, int num, const net::Address<UAF>* addr) {
     return sendto(this->fd_, data, num, 0,
                   (addr ? addr->GetCStyleAddress() : nullptr),
                   (addr ? addr->AddressSize() : 0));
   }
 
   template <net::Protocol UP = P>
-  requires(UP != net::Protocol::UDP) ssize_t
-      Recv(char* buf, int max_recv_bytes,
-           int flags = MSG_NOSIGNAL) {  // TODO this is linux specific
+    requires(UP != net::Protocol::UDP)
+  ssize_t Recv(char* buf, int max_recv_bytes,
+               int flags = MSG_NOSIGNAL) {  // TODO this is linux specific
     return recv(this->fd_, buf, max_recv_bytes, flags);
   }
 
   template <net::Protocol UP = P>
-  requires(UP != net::Protocol::UDP) ssize_t
-      Read(char* buf, int max_recv_bytes) {
+    requires(UP != net::Protocol::UDP)
+  ssize_t Read(char* buf, int max_recv_bytes) {
     return Recv<UP>(buf, max_recv_bytes, 0);
   }
 
   template <net::Domain UAF, net::Protocol UP = P>
-  requires(UP == net::Protocol::UDP) ssize_t
-      RecvFrom(char* buf, int max_recv_bytes, net::Address<UAF>* addr) {
+    requires(UP == net::Protocol::UDP)
+  ssize_t RecvFrom(char* buf, int max_recv_bytes, net::Address<UAF>* addr) {
     sockaddr in_addr;
     socklen_t in_addr_len;
     ssize_t tmp_read =
@@ -211,7 +212,8 @@ class SocketBase : public IOBase {
     return tmp_read;
   }
 
- private : void MoveFrom(SocketBase&& other) {
+ private:
+  void MoveFrom(SocketBase&& other) {
     addr_ = std::move(other.addr_);
     is_non_blocking_ = other.is_non_blocking_;
   }

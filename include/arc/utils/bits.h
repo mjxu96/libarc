@@ -37,7 +37,8 @@ namespace arc {
 namespace utils {
 
 template <typename T>
-requires std::is_arithmetic_v<T> T BitSet(T in_coming, int bit_pos, bool val) {
+  requires std::is_arithmetic_v<T>
+T BitSet(T in_coming, int bit_pos, bool val) {
   assert(bit_pos <= sizeof(T) * 8u);
   if (val) {
     return (in_coming | (1UL << bit_pos));
@@ -46,26 +47,29 @@ requires std::is_arithmetic_v<T> T BitSet(T in_coming, int bit_pos, bool val) {
 }
 
 template <typename T>
-requires std::is_arithmetic_v<T> bool GetBit(T in_coming, int bit_pos) {
+  requires std::is_arithmetic_v<T> bool
+GetBit(T in_coming, int bit_pos) {
   assert(bit_pos <= sizeof(T) * 8u);
   return (in_coming & ~(1UL << bit_pos)) > 0;
 }
 
 template <typename T>
-requires std::is_arithmetic_v<T> std::bitset<sizeof(T) * 8U> GetStdBitSet(
-    T in_coming) {
+  requires std::is_arithmetic_v<T>
+std::bitset<sizeof(T) * 8U> GetStdBitSet(T in_coming) {
   return std::bitset<sizeof(T) * 8U>(in_coming);
 }
 
 template <typename T>
-requires std::is_arithmetic_v<T> T GetLowerBits(T in_coming, int lower_bits) {
+  requires std::is_arithmetic_v<T>
+T GetLowerBits(T in_coming, int lower_bits) {
   assert(lower_bits <= sizeof(T) * 8u);
   T all_ones = ~(0);
   return (in_coming & (~(all_ones << lower_bits)));
 }
 
 template <typename T>
-requires std::is_arithmetic_v<T> std::string GetHexString(T value) {
+  requires std::is_arithmetic_v<T>
+std::string GetHexString(T value) {
   size_t hex_len = sizeof(T) << 1;
   static const char* digits = "0123456789ABCDEF";
   std::string rc(hex_len, '0');

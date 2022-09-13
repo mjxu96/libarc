@@ -68,7 +68,7 @@ class CancelCoroTest : public ::testing::Test {
   }
 
   coro::Task<void> MutilpleRunConditionCancel(int thread_id, int num,
-                                               bool will_be_self_released) {
+                                              bool will_be_self_released) {
     for (int i = 0; i < num; i++) {
       coro::EnsureFuture(ConditionCancel(will_be_self_released));
     }
@@ -87,11 +87,13 @@ class CancelCoroTest : public ::testing::Test {
     }
   }
 
-  void MultiThreadMutilpleRunConditionCancel(int thread_num, int per_thread_num, bool will_be_self_released) {
+  void MultiThreadMutilpleRunConditionCancel(int thread_num, int per_thread_num,
+                                             bool will_be_self_released) {
     std::vector<std::thread> threads;
     for (int i = 0; i < thread_num; i++) {
       threads.emplace_back([this, i, per_thread_num, will_be_self_released]() {
-        coro::StartEventLoop(this->MutilpleRunConditionCancel(i, per_thread_num, will_be_self_released));
+        coro::StartEventLoop(this->MutilpleRunConditionCancel(
+            i, per_thread_num, will_be_self_released));
       });
     }
 

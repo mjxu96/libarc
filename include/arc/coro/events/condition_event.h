@@ -45,11 +45,9 @@ namespace coro {
 class ConditionEvent : public UserEvent {
  public:
   ConditionEvent(std::coroutine_handle<void> handle)
-      : UserEvent(handle), EventBase(handle) {
-  }
+      : UserEvent(handle), EventBase(handle) {}
 
   virtual ~ConditionEvent() = default;
-
 };
 
 }  // namespace coro

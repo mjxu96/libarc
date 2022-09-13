@@ -294,7 +294,7 @@ inline thread_id_t thread_id() {
     !defined(_M_ARM) && !defined(__aarch64__)
 // Assume `thread_local` is fully supported in all other C++11
 // compilers/platforms
-//#define MOODYCAMEL_CPP11_THREAD_LOCAL_SUPPORTED    // always disabled for now
+// #define MOODYCAMEL_CPP11_THREAD_LOCAL_SUPPORTED    // always disabled for now
 // since several users report having problems with it on
 #endif
 #endif
@@ -667,7 +667,7 @@ struct nomove_if<false> {
 };
 
 template <typename It>
-static inline auto deref_noexcept(It& it) MOODYCAMEL_NOEXCEPT -> decltype(*it) {
+static inline auto deref_noexcept(It& it) MOODYCAMEL_NOEXCEPT->decltype(*it) {
   return *it;
 }
 

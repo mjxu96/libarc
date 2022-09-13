@@ -39,10 +39,9 @@ class Executor {
   Executor() = default;
 
   template <typename Functor, typename... Args>
-  ExecutorAwaiter<Functor, Args...> Execute(Functor&& functor,
-                                                    Args&&... args) {
-    return ExecutorAwaiter<Functor, Args...>(
-        std::forward<Functor>(functor), std::forward<Args>(args)...);
+  ExecutorAwaiter<Functor, Args...> Execute(Functor&& functor, Args&&... args) {
+    return ExecutorAwaiter<Functor, Args...>(std::forward<Functor>(functor),
+                                             std::forward<Args>(args)...);
   }
 };
 

@@ -50,6 +50,7 @@ class TimeEvent : virtual public EventBase {
   const inline bool IsTrigger() const { return is_trigger_; }
 
   friend class TimeEventComparator;
+
  protected:
   std::int64_t wakeup_time_ = 0;
   bool is_valid_{true};

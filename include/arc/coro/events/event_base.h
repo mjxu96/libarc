@@ -55,21 +55,15 @@ class EventBase {
     handle_.resume();
   }
 
-  inline void SetEventID(EventID event_id) {
-    event_id_ = event_id;
-  }
+  inline void SetEventID(EventID event_id) { event_id_ = event_id; }
 
   inline void SetInterrupted(bool is_interrupted) {
     is_interrupted_ = is_interrupted;
   }
 
-  inline const EventID GetEventID() const {
-    return event_id_;
-  }
+  inline const EventID GetEventID() const { return event_id_; }
 
-  inline const bool IsInterrupted() const {
-    return is_interrupted_;
-  }
+  inline const bool IsInterrupted() const { return is_interrupted_; }
 
  protected:
   std::coroutine_handle<void> handle_{nullptr};

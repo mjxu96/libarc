@@ -6,17 +6,17 @@
  * -----
  * MIT License
  * Copyright (c) 2020 Minjun Xu
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
  * deal in the Software without restriction, including without limitation the
  * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
  * sell copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -77,9 +77,13 @@ class BoundEvent : virtual public EventBase {
 
   virtual ~BoundEvent() = default;
 
-  inline const detail::BoundType GetBountEventType() const { return bound_event_type_; }
-  
-  inline const detail::TriggerType GetTriggerType() const { return trigger_type_; }
+  inline const detail::BoundType GetBountEventType() const {
+    return bound_event_type_;
+  }
+
+  inline const detail::TriggerType GetTriggerType() const {
+    return trigger_type_;
+  }
 
   inline const EventID GetBountEventID() const { return bound_event_id_; }
 
@@ -87,8 +91,12 @@ class BoundEvent : virtual public EventBase {
 
   inline EventBase* GetBoundEvent() const { return bound_event_; }
 
-  inline void SetIterator(const std::list<BoundEvent*>::iterator& itr) { event_itr_ = itr; }
-  inline const std::list<BoundEvent*>::iterator& GetIterator() const { return event_itr_; }
+  inline void SetIterator(const std::list<BoundEvent*>::iterator& itr) {
+    event_itr_ = itr;
+  }
+  inline const std::list<BoundEvent*>::iterator& GetIterator() const {
+    return event_itr_;
+  }
 
  private:
   EventID bound_event_id_;

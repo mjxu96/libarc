@@ -79,11 +79,13 @@ class TimeoutCoroTest : public ::testing::Test {
     }
   }
 
-  void MultiThreadMutilpleRunConditionCancel(int thread_num, int per_thread_num, bool will_be_self_released) {
+  void MultiThreadMutilpleRunConditionCancel(int thread_num, int per_thread_num,
+                                             bool will_be_self_released) {
     std::vector<std::thread> threads;
     for (int i = 0; i < thread_num; i++) {
       threads.emplace_back([this, i, per_thread_num, will_be_self_released]() {
-        coro::StartEventLoop(this->MutilpleRunConditionTimeout(i, per_thread_num, will_be_self_released));
+        coro::StartEventLoop(this->MutilpleRunConditionTimeout(
+            i, per_thread_num, will_be_self_released));
       });
     }
 
@@ -91,7 +93,6 @@ class TimeoutCoroTest : public ::testing::Test {
       threads[i].join();
     }
   }
-
 };
 
 TEST_F(TimeoutCoroTest, TestConditionTimeoutSelfReleased) {

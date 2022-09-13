@@ -74,12 +74,14 @@ class Address {
   }
 
   template <Domain UAF = AF>
-  requires(UAF == Domain::IPV4) Address(const sockaddr_in& addr) {
+    requires(UAF == Domain::IPV4)
+  Address(const sockaddr_in& addr) {
     Init(addr);
   }
 
   template <Domain UAF = AF>
-  requires(UAF == Domain::IPV6) Address(const sockaddr_in6& addr) {
+    requires(UAF == Domain::IPV6)
+  Address(const sockaddr_in6& addr) {
     Init(addr);
   }
 

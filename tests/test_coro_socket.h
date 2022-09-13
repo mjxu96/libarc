@@ -202,14 +202,14 @@ class SocketCoroTest : public ::testing::Test {
   }
 
   template <typename UT = T>
-  requires(UT::socket_type == SocketCoroTestType::BASIC) AcceptorType
-      InitAcceptor() {
+    requires(UT::socket_type == SocketCoroTestType::BASIC)
+  AcceptorType InitAcceptor() {
     return AcceptorType();
   }
 
   template <typename UT = T>
-  requires(UT::socket_type == SocketCoroTestType::TLS) AcceptorType
-      InitAcceptor() {
+    requires(UT::socket_type == SocketCoroTestType::TLS)
+  AcceptorType InitAcceptor() {
     return AcceptorType(key_dir_ + "cert.pem", key_dir_ + "key.pem");
   }
 

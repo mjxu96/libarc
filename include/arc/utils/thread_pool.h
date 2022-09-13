@@ -61,20 +61,20 @@
 #include <thread>
 #include <vector>
 
-#include <arc/coro/events/user_event.h>
 #include <arc/coro/eventloop.h>
+#include <arc/coro/events/user_event.h>
 
 namespace arc {
 namespace utils {
 
 class ThreadPool {
  public:
-
   static ThreadPool& GetInstance();
 
   // add new work item to the pool
   template <class F, class... Args>
-  auto Enqueue(coro::EventLoop* loop, coro::UserEvent* event, F&& f, Args&&... args)
+  auto Enqueue(coro::EventLoop* loop, coro::UserEvent* event, F&& f,
+               Args&&... args)
       -> std::future<typename std::result_of<F(Args...)>::type> {
     using return_type = typename std::result_of<F(Args...)>::type;
 
@@ -96,9 +96,7 @@ class ThreadPool {
   }
   ~ThreadPool();
 
-  const inline int GetThreadPoolSize() const {
-    return workers_.size();
-  }
+  const inline int GetThreadPoolSize() const { return workers_.size(); }
 
  private:
   ThreadPool(size_t);

@@ -97,8 +97,8 @@ Task<void> HandleClient(
       co_await sock.Send(ret.c_str(), ret.size());
     }
   }
-  std::cout << "connection closed, " << recv << " errno: " << errno << std::endl;
-
+  std::cout << "connection closed, " << recv << " errno: " << errno
+            << std::endl;
 
   // co_await SleepFor(std::chrono::seconds(1));
   // EventLoop::GetLocalInstance().DeResigerConsumer();
@@ -107,8 +107,8 @@ Task<void> HandleClient(
 Task<void> HandleClient(TLSSocket<Domain::IPV4, Pattern::ASYNC> sock) {
   std::shared_ptr<char[]> data(new char[1024]);
   auto local_addr = sock.GetPeerAddress();
-  std::cout << "client ip: " << local_addr.GetHost() << " port: " <<
-  local_addr.GetPort() << std::endl;
+  std::cout << "client ip: " << local_addr.GetHost()
+            << " port: " << local_addr.GetPort() << std::endl;
   std::string received;
   bool connection_alive = true;
   int recv = 0;
@@ -131,7 +131,8 @@ Task<void> HandleClient(TLSSocket<Domain::IPV4, Pattern::ASYNC> sock) {
       co_await sock.Send(ret.c_str(), ret.size());
     }
   }
-  std::cout << "connection closed, " << recv << " errno: " << errno << std::endl;
+  std::cout << "connection closed, " << recv << " errno: " << errno
+            << std::endl;
 }
 
 Task<void> Listen() {
@@ -247,7 +248,8 @@ Task<void> DispatchAccept(int thread_num) {
   while (i < 4000) {
     auto in_sock = co_await accpetor.Accept();
     std::cout << "accepted client " << i << std::endl;
-    arc::coro::EventLoop::GetLocalInstance().Dispatch(HandleClient(std::move(in_sock)));
+    arc::coro::EventLoop::GetLocalInstance().Dispatch(
+        HandleClient(std::move(in_sock)));
     // arc::coro::EventLoop::GetLocalInstance().DispatchTo(HandleClient(std::move(in_sock)),
     // consumer_id);
     i++;

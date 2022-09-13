@@ -32,10 +32,10 @@
 #ifdef __linux__
 
 #include <arc/coro/events/cancellation_event.h>
-#include <arc/coro/events/timeout_event.h>
 #include <arc/coro/events/condition_event.h>
 #include <arc/coro/events/io_event.h>
 #include <arc/coro/events/time_event.h>
+#include <arc/coro/events/timeout_event.h>
 #include <arc/io/io_base.h>
 #include <sys/epoll.h>
 
@@ -73,19 +73,18 @@ class Poller : public io::detail::IOBase {
 
   inline bool IsPollerDone() {
     std::lock_guard<std::mutex> guard(poller_lock_);
-    auto ret = (total_io_events_ + time_events_.size() +
-                pending_user_events_.size() + triggered_user_events_.size() +
-                pending_bound_events_.size() +
-                triggered_bound_events_.size() ==
-            0) &&
-           (!is_dispatcher_registered_);
+    auto ret =
+        (total_io_events_ + time_events_.size() + pending_user_events_.size() +
+             triggered_user_events_.size() + pending_bound_events_.size() +
+             triggered_bound_events_.size() ==
+         0) &&
+        (!is_dispatcher_registered_);
     return ret;
   }
 
   inline int GetEventHandle() const { return user_event_fd_; }
   bool TriggerUserEvent(EventID event_id);
-  void TriggerBoundEvent(EventID bound_event_id,
-                                coro::BoundEvent* event);
+  void TriggerBoundEvent(EventID bound_event_id, coro::BoundEvent* event);
 
   int Register();
   void DeRegister();
@@ -142,8 +141,7 @@ class Poller : public io::detail::IOBase {
   coro::IOEvent* PopIOEvent(int fd, io::IOType event_type);
   EventBase* PopBoundEvent(coro::BoundEvent* event);
   void RemoveBoundEvent(int count);
-  void TriggerBoundEventInternal(int bound_event_id,
-                                coro::BoundEvent* event);
+  void TriggerBoundEventInternal(int bound_event_id, coro::BoundEvent* event);
 };
 
 }  // namespace coro

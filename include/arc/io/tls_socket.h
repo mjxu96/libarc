@@ -104,13 +104,14 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::SYNC) ssize_t Recv(char* buf, int max_recv_bytes) {
+    requires(UPP == Pattern::SYNC)
+  ssize_t Recv(char* buf, int max_recv_bytes) {
     return SSL_read(ssl_.ssl, buf, max_recv_bytes);
   }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::ASYNC) coro::Task<ssize_t> Recv(char* buf,
-                                                           int max_recv_bytes) {
+    requires(UPP == Pattern::ASYNC)
+  coro::Task<ssize_t> Recv(char* buf, int max_recv_bytes) {
     while (true) {
       ssize_t ret = SSL_read(ssl_.ssl, buf, max_recv_bytes);
       if (ret <= 0) {
@@ -139,8 +140,9 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::ASYNC) coro::Task<ssize_t> Recv(
-      char* buf, int max_recv_bytes, const coro::CancellationToken& token) {
+    requires(UPP == Pattern::ASYNC)
+  coro::Task<ssize_t> Recv(char* buf, int max_recv_bytes,
+                           const coro::CancellationToken& token) {
     auto token_copy = token;
     while (true) {
       ssize_t ret = SSL_read(ssl_.ssl, buf, max_recv_bytes);
@@ -182,9 +184,9 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::ASYNC) coro::Task<ssize_t> Recv(
-      char* buf, int max_recv_bytes,
-      const std::chrono::steady_clock::duration& timeout) {
+    requires(UPP == Pattern::ASYNC)
+  coro::Task<ssize_t> Recv(char* buf, int max_recv_bytes,
+                           const std::chrono::steady_clock::duration& timeout) {
     auto timeout_copy = timeout;
     while (true) {
       ssize_t ret = SSL_read(ssl_.ssl, buf, max_recv_bytes);
@@ -226,18 +228,20 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::SYNC) int Send(const void* data, int num) {
+    requires(UPP == Pattern::SYNC)
+  int Send(const void* data, int num) {
     return SSL_write(ssl_.ssl, data, num);
   }
 
   template <Pattern UPP = PP, concepts::Writable DataType>
-  requires(UPP == Pattern::SYNC) int Send(DataType&& data) {
+    requires(UPP == Pattern::SYNC)
+  int Send(DataType&& data) {
     return Send(data.c_str(), data.size());
   }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::ASYNC) coro::Task<int> Send(const void* data,
-                                                       int num) {
+    requires(UPP == Pattern::ASYNC)
+  coro::Task<int> Send(const void* data, int num) {
     int ret = -1;
     do {
       ret = SSL_write(ssl_.ssl, data, num);
@@ -262,8 +266,9 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::ASYNC) coro::Task<int> Send(
-      const void* data, int num, const coro::CancellationToken& token) {
+    requires(UPP == Pattern::ASYNC)
+  coro::Task<int> Send(const void* data, int num,
+                       const coro::CancellationToken& token) {
     auto token_copy = token;
     bool is_abort = false;
     int ret = -1;
@@ -302,9 +307,9 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::ASYNC) coro::Task<int> Send(
-      const void* data, int num,
-      const std::chrono::steady_clock::duration& timeout) {
+    requires(UPP == Pattern::ASYNC)
+  coro::Task<int> Send(const void* data, int num,
+                       const std::chrono::steady_clock::duration& timeout) {
     auto timeout_copy = timeout;
     bool is_abort = false;
     int ret = -1;
@@ -343,7 +348,8 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::SYNC) void Connect(const net::Address<AF>& addr) {
+    requires(UPP == Pattern::SYNC)
+  void Connect(const net::Address<AF>& addr) {
     Socket<AF, net::Protocol::TCP, UPP>::Connect(addr);
     if (SSL_connect(ssl_.ssl) != 1) {
       throw arc::exception::TLSException("Connection Error");
@@ -351,8 +357,8 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   }
 
   template <Pattern UPP = PP>
-  requires(UPP ==
-           Pattern::ASYNC) coro::Task<void> Connect(net::Address<AF> addr) {
+    requires(UPP == Pattern::ASYNC)
+  coro::Task<void> Connect(net::Address<AF> addr) {
     // initial TCP connect
     co_await Socket<AF, net::Protocol::TCP, UPP>::Connect(addr);
 
@@ -379,7 +385,8 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::SYNC) void Shutdown() {
+    requires(UPP == Pattern::SYNC)
+  void Shutdown() {
     if (!ssl_.ssl) {
       return;
     }
@@ -400,7 +407,8 @@ class TLSSocket : virtual public Socket<AF, net::Protocol::TCP, PP> {
   }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::ASYNC) coro::Task<void> Shutdown() {
+    requires(UPP == Pattern::ASYNC)
+  coro::Task<void> Shutdown() {
     if (!ssl_.ssl) {
       co_return;
     }
@@ -488,7 +496,8 @@ class TLSAcceptor : public TLSSocket<AF, PP>, public Acceptor<AF, PP> {
   }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::SYNC) TLSSocket<AF, PP> Accept() {
+    requires(UPP == Pattern::SYNC)
+  TLSSocket<AF, PP> Accept() {
     TLSSocket<AF, PP> tls_socket(Acceptor<AF, PP>::InternalAccept(),
                                  this->protocol_, this->type_);
     tls_socket.SetAcceptState();
@@ -499,14 +508,16 @@ class TLSAcceptor : public TLSSocket<AF, PP>, public Acceptor<AF, PP> {
   }
 
   template <Pattern UPP = PP>
-  requires(UPP == Pattern::ASYNC) coro::Task<TLSSocket<AF, PP>> Accept() {
+    requires(UPP == Pattern::ASYNC)
+  coro::Task<TLSSocket<AF, PP>> Accept() {
     TLSSocket<AF, PP> tls_socket(co_await Acceptor<AF, PP>::Accept(),
                                  this->protocol_, this->type_);
     tls_socket.SetAcceptState();
     co_return std::move(tls_socket);
   }
 
- private : bool TLSIOReadyFunctor() { return false; }
+ private:
+  bool TLSIOReadyFunctor() { return false; }
   void TLSIOResumeFunctor() { return; }
 
   void LoadCertificateAndKey(const std::string& cert_file,

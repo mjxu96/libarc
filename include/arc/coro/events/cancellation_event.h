@@ -32,17 +32,18 @@
 #include "bound_event.h"
 namespace arc {
 namespace coro {
-  
 
 class CancellationEvent : public BoundEvent {
  public:
   CancellationEvent(UserEvent* event)
-      : BoundEvent(event, detail::TriggerType::USER_EVENT), EventBase(nullptr) {}
+      : BoundEvent(event, detail::TriggerType::USER_EVENT),
+        EventBase(nullptr) {}
   CancellationEvent(IOEvent* event)
-      : BoundEvent(event, detail::TriggerType::USER_EVENT), EventBase(nullptr) {}
+      : BoundEvent(event, detail::TriggerType::USER_EVENT),
+        EventBase(nullptr) {}
 };
 
-} // namespace coro
-} // namespace arc
+}  // namespace coro
+}  // namespace arc
 
 #endif

@@ -30,8 +30,8 @@
 #include <arc/coro/eventloop.h>
 #include <arc/coro/locks/condition.h>
 #include <arc/coro/locks/lock.h>
-#include <arc/coro/utils/cancellation_token.h>
 #include <arc/coro/task.h>
+#include <arc/coro/utils/cancellation_token.h>
 
 #include <chrono>
 #include <thread>
@@ -48,7 +48,11 @@ Task<void> CoroTimeoutWait(std::chrono::seconds seconds) {
   auto now = std::chrono::steady_clock::now();
   co_await cond.WaitFor(seconds);
   auto then = std::chrono::steady_clock::now();
-  std::cout << "wait finish spend: " << (std::chrono::duration_cast<std::chrono::milliseconds>(then - now).count()) << std::endl;
+  std::cout << "wait finish spend: "
+            << (std::chrono::duration_cast<std::chrono::milliseconds>(then -
+                                                                      now)
+                    .count())
+            << std::endl;
 }
 
 void RunCoroTimeoutWait(int seconds, int num_per_thread) {
@@ -58,7 +62,8 @@ void RunCoroTimeoutWait(int seconds, int num_per_thread) {
   RunUntilComplete();
 }
 
-void MultiThreadRunCoroTimeoutWait(int thread_num, int num_per_thread, int seconds) {
+void MultiThreadRunCoroTimeoutWait(int thread_num, int num_per_thread,
+                                   int seconds) {
   std::vector<std::thread> threads;
   for (int i = 0; i < thread_num; i++) {
     threads.emplace_back(&RunCoroTimeoutWait, seconds, num_per_thread);

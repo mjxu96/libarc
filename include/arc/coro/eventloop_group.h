@@ -34,7 +34,6 @@
 namespace arc {
 namespace coro {
 
-
 class EventLoopGroup {
  public:
   static EventLoopGroup& GetInstance() {
@@ -67,9 +66,7 @@ class EventLoopGroup {
     return event_loop_itr->second;
   }
 
-  std::mutex& EventLoopGroupLock() {
-    return lock_;
-  }
+  std::mutex& EventLoopGroupLock() { return lock_; }
 
  private:
   EventLoopGroup() = default;

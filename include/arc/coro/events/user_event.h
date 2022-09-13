@@ -29,20 +29,23 @@
 #ifndef LIBARC__CORO__EVENTS__USER_EVENT_H
 #define LIBARC__CORO__EVENTS__USER_EVENT_H
 
-#include "event_base.h"
 #include <list>
+#include "event_base.h"
 
 namespace arc {
 namespace coro {
 
 class UserEvent : virtual public EventBase {
  public:
-  UserEvent(std::coroutine_handle<void> handle)
-      : EventBase(handle) {}
+  UserEvent(std::coroutine_handle<void> handle) : EventBase(handle) {}
   virtual ~UserEvent() = default;
 
-  void SetIterator(const std::list<UserEvent*>::iterator& itr) { event_itr_ = itr; }
-  const std::list<UserEvent*>::iterator& GetIterator() const { return event_itr_; }
+  void SetIterator(const std::list<UserEvent*>::iterator& itr) {
+    event_itr_ = itr;
+  }
+  const std::list<UserEvent*>::iterator& GetIterator() const {
+    return event_itr_;
+  }
 
  protected:
   std::list<UserEvent*>::iterator event_itr_;

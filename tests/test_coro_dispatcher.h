@@ -83,7 +83,8 @@ class DispatcherCoroTest : public ::testing::Test {
         // yield temporarily to avoid dispatch all tasks to one
         co_await coro::Yield();
       } else {
-        coro::EventLoop::GetLocalInstance().DispatchTo(DispatchedTask(), target);
+        coro::EventLoop::GetLocalInstance().DispatchTo(DispatchedTask(),
+                                                       target);
       }
     }
     coro::EventLoop::GetLocalInstance().DeResigerProducer();
