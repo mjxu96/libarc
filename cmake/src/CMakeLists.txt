@@ -4,6 +4,7 @@ include_directories("${LIBARC_SOURCE_DIR}/include")
 find_package(Threads)
 find_package(OpenSSL)
 find_package(mariadb-connector-c)
+find_package(CURL)
 
 set(ARC_CORO_FILES
   ${LIBARC_SOURCE_DIR}/src/coro/eventloop.cc
@@ -28,6 +29,11 @@ set(ARC_EXCEPTION_FILES
   ${LIBARC_SOURCE_DIR}/src/exception/db.cc
 )
 
+set(ARC_HTTP_FILES
+  ${LIBARC_SOURCE_DIR}/src/http/http_parser.cc
+  ${LIBARC_SOURCE_DIR}/src/http/http_server.cc
+)
+
 set(ARC_LOGGING_FILES
   ${LIBARC_SOURCE_DIR}/src/logging/logger.cc
   ${LIBARC_SOURCE_DIR}/src/logging/logging.cc
@@ -43,13 +49,14 @@ add_library(arc
   ${ARC_DB_FILES}
   ${ARC_IO_FILES}
   ${ARC_EXCEPTION_FILES}
+  ${ARC_HTTP_FILES}
   ${ARC_LOGGING_FILES}
   ${ARC_UTILS_FILES}
 )
 
 target_link_libraries(arc
   ${CMAKE_THREAD_LIBS_INIT}
-  mariadb-connector-c::mariadb-connector-c OpenSSL::SSL OpenSSL::Crypto
+  CURL::CURL mariadb-connector-c::mariadb-connector-c OpenSSL::SSL OpenSSL::Crypto
 )
 
 target_include_directories(arc

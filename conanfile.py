@@ -5,7 +5,7 @@ class LibarcConan(ConanFile):
     name = "libarc"
     version = "1.0.0"
     settings = "os", "compiler", "build_type", "arch"
-    requires = ["mariadb-connector-c/3.1.12", "fmt/9.1.0"]
+    requires = ["mariadb-connector-c/3.1.12", "fmt/9.1.0", "openssl/[~1.1.1q]", "libcurl/[~7.84.0]"]
     generators = "cmake", "cmake_find_package"
     options = {"build_test": [True, False]}
     default_options = {"build_test": True}
@@ -21,7 +21,6 @@ class LibarcConan(ConanFile):
     def configure(self):
         if self.options.build_test:
             self.requires.add("gtest/cci.20210126")
-        
 
     def build(self):
         cmake = self._configure_cmake()
